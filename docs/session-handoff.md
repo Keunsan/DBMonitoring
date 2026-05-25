@@ -6,13 +6,13 @@ Last updated: 2026-05-26 KST
 
 ## 저장소
 
-- GitHub: https://github.com/Keunsan/prj_dbmonitoring.git
+- GitHub: https://github.com/Keunsan/dbmonitoring.git
 - 브랜치: `main`
 
 처음 받을 때:
 
 ```bash
-git clone https://github.com/Keunsan/prj_dbmonitoring.git
+git clone https://github.com/Keunsan/dbmonitoring.git
 ```
 
 이미 클론한 PC에서는 `git pull`만 하면 됩니다.
@@ -46,14 +46,14 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 
 ## 현재 프로젝트 상태
 
-- Git remote: `https://github.com/Keunsan/prj_dbmonitoring.git`
+- Git remote: local `origin` may still point to `https://github.com/Keunsan/prj_dbmonitoring.git`, but GitHub redirects to `https://github.com/Keunsan/dbmonitoring.git`
 - Repository root: `dbmonitoring`
 - App directory: repository root
 - Framework: Next.js `16.2.6`, React `19.2.4`, Tailwind CSS `4`
 - 주요 파일: `app/page.tsx`, `app/layout.tsx`, `app/globals.css`, `package.json`
 - 현재 앱은 아직 `create-next-app` 기본 scaffold에 가까운 상태이며, `app/page.tsx`도 기본 시작 화면입니다.
 - `AGENTS.md`에 따라 Next.js 관련 코드 수정 전에는 필요 시 `node_modules/next/dist/docs/` 문서를 확인합니다.
-- 2026-05-26 02:09 KST 기준 최근 커밋은 `e36df02 2605260208_T-004`입니다.
+- 2026-05-26 02:10 KST 기준 Phase 0 작업 커밋은 `e36df02 2605260208_T-004`이며, 이후 PC 이동용 handoff 갱신 커밋이 추가됩니다.
 
 ## 현재 결정 사항
 
@@ -75,12 +75,12 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 - 다음 작업: **T-005** (프로젝트 폴더 구조 및 공통 모듈 설계)
 - 애플리케이션 코드 변경 없음.
 
-## Git 상태 (2026-05-26 02:09 KST)
+## Git 상태 (2026-05-26 02:10 KST)
 
 - 현재 브랜치: `main`
-- 원격 저장소: `origin https://github.com/Keunsan/prj_dbmonitoring.git`
-- `git status --short`: 출력 없음, working tree clean
-- 최근 커밋: `e36df02 2605260208_T-004`
+- 원격 저장소: local `origin https://github.com/Keunsan/prj_dbmonitoring.git`, canonical `https://github.com/Keunsan/dbmonitoring.git`
+- `git status --short`: PC 이동 전 최종 커밋/푸시 후 clean 상태로 맞춥니다.
+- 최근 작업 커밋: `e36df02 2605260208_T-004`
 
 ## 이번 세션에서 확인한 내용
 
@@ -102,9 +102,9 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 
 - `git status --short`: 출력 없음, working tree clean.
 - `git branch --show-current`: `main`.
-- `git remote -v`: `origin https://github.com/Keunsan/prj_dbmonitoring.git`.
-- `git log -3 --oneline`: 최근 커밋은 `e36df02 2605260208_T-004`, `0bb5124 test`, `8c99c6a 260526 md files add`.
-- PC 이동 전 요청에 따라 이 문서를 최신 상태로 갱신하고 별도 커밋/푸시한다.
+- `git remote -v`: local `origin https://github.com/Keunsan/prj_dbmonitoring.git`.
+- `git log -3 --oneline`: 최근 커밋은 `bdf00bb Update session handoff for PC transfer`, `e36df02 2605260208_T-004`, `0bb5124 test`.
+- `git push origin main`: 성공. GitHub가 새 위치 `https://github.com/Keunsan/dbmonitoring.git`를 안내함.
 
 ## 남은 작업과 다음 단계
 
