@@ -1,18 +1,18 @@
 # Session Handoff
 
-Last updated: 2026-05-22 16:51 KST
+Last updated: 2026-05-26 KST
 
 이 문서는 같은 Cursor 계정으로 여러 PC에서 작업을 이어가기 위한 인수인계 문서입니다. Cursor 채팅이 PC 간 자동 동기화된다고 가정하지 말고, GitHub의 코드 상태와 이 문서를 기준으로 이어갑니다.
 
 ## 저장소
 
-- GitHub: https://github.com/Keunsan/DBMonitoring.git
+- GitHub: https://github.com/Keunsan/dbmonitoring.git
 - 브랜치: `main`
 
 처음 받을 때:
 
 ```bash
-git clone https://github.com/Keunsan/DBMonitoring.git
+git clone https://github.com/Keunsan/dbmonitoring.git
 ```
 
 이미 클론한 PC에서는 `git pull`만 하면 됩니다.
@@ -46,7 +46,7 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 
 ## 현재 프로젝트 상태
 
-- Git remote: `https://github.com/Keunsan/DBMonitoring.git`
+- Git remote: `https://github.com/Keunsan/dbmonitoring.git`
 - Repository root: `DBMonitoring`
 - App directory: `dbmonitoring`
 - Framework: Next.js `16.2.6`, React `19.2.4`, Tailwind CSS `4`
@@ -62,14 +62,29 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 - Shared Transcripts는 링크 기반 공유용 보조 수단이며, 기본 동기화 방식으로 사용하지 않습니다.
 - Cursor Chat Transfer는 전체 채팅 export/import가 꼭 필요할 때만 사용합니다.
 - `docs` 하위 문서는 통합 DB 모니터링 시스템의 제안, 요구사항, 화면 설계, 수집 항목 정의를 담은 개발 기준 문서로 사용합니다.
+- **개발 실행 계획**은 [development-plan.md](./development-plan.md)에서 TASK 단위로 관리합니다. AGENT 작업 시 PRD + development-plan을 함께 참조합니다.
 - 1차 개발은 문서 기준상 통합 대시보드, DB 실시간 현황, 세션, Blocking, Deadlock, Wait, Top SQL, 실시간 알림, DB 인스턴스 관리, 사용자 및 권한 관리를 MVP 범위로 보는 것이 자연스럽습니다.
 - 개발 시에는 시큐어 코딩 원칙을 필수 기준으로 적용하고, `docs/02_requirements_definition.md`의 NFR-004 보안 요구사항을 우선 확인합니다.
 
 ## 현재 목표
 
-- `docs` 문서를 기준으로 통합 DB 모니터링 시스템의 하위 시스템 개발 방향을 정리하고, 이후 구현을 시작할 수 있는 상태를 만든다.
-- 현재까지는 문서 분석만 수행했으며 애플리케이션 코드 변경은 없다.
-- 다음 작업자는 `docs/02_requirements_definition.md`, `docs/03_screen_design_outline.md`, `docs/04_db_collection_items.md`를 기준으로 MVP 범위를 확정하고 설계/구현을 시작하면 된다.
+- Phase 0 기준 정리 완료. **T-001~T-004 완료**.
+- T-001: [T-001_mvp-scope.md](./T-001_mvp-scope.md)
+- T-002: [T-002_data-model-outline.md](./T-002_data-model-outline.md)
+- T-003: [T-003_architecture.md](./T-003_architecture.md)
+- T-004: [T-004_security-checklist.md](./T-004_security-checklist.md)
+- 다음 작업: **T-005** (프로젝트 폴더 구조 및 공통 모듈 설계)
+- 애플리케이션 코드 변경 없음.
+
+## Git 상태 (2026-05-26)
+
+- `M docs/session-handoff.md`
+- `?? .cursor/`
+- `?? docs/development-plan.md`
+- `?? docs/T-001_mvp-scope.md`
+- `?? docs/T-002_data-model-outline.md`
+- `?? docs/T-003_architecture.md`
+- `?? docs/T-004_security-checklist.md`
 
 ## 이번 세션에서 확인한 내용
 
