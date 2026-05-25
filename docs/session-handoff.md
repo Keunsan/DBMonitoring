@@ -6,13 +6,13 @@ Last updated: 2026-05-26 KST
 
 ## 저장소
 
-- GitHub: https://github.com/Keunsan/dbmonitoring.git
+- GitHub: https://github.com/Keunsan/prj_dbmonitoring.git
 - 브랜치: `main`
 
 처음 받을 때:
 
 ```bash
-git clone https://github.com/Keunsan/dbmonitoring.git
+git clone https://github.com/Keunsan/prj_dbmonitoring.git
 ```
 
 이미 클론한 PC에서는 `git pull`만 하면 됩니다.
@@ -46,15 +46,14 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 
 ## 현재 프로젝트 상태
 
-- Git remote: `https://github.com/Keunsan/dbmonitoring.git`
-- Repository root: `DBMonitoring`
-- App directory: `dbmonitoring`
+- Git remote: `https://github.com/Keunsan/prj_dbmonitoring.git`
+- Repository root: `dbmonitoring`
+- App directory: repository root
 - Framework: Next.js `16.2.6`, React `19.2.4`, Tailwind CSS `4`
-- 주요 파일: `dbmonitoring/app/page.tsx`, `dbmonitoring/app/layout.tsx`, `dbmonitoring/app/globals.css`, `dbmonitoring/package.json`
-- 현재 앱은 아직 `create-next-app` 기본 scaffold에 가까운 상태이며, `dbmonitoring/app/page.tsx`도 기본 시작 화면입니다.
-- `dbmonitoring/AGENTS.md`에 따라 Next.js 관련 코드 수정 전에는 필요 시 `node_modules/next/dist/docs/` 문서를 확인합니다.
-- 2026-05-22 16:45 문서 업데이트 전 `git status --short` 결과는 clean이었습니다.
-- 이번 인수인계 업데이트에는 `docs/session-handoff.md`와 `docs/02_requirements_definition.md` 문서 변경이 포함됩니다.
+- 주요 파일: `app/page.tsx`, `app/layout.tsx`, `app/globals.css`, `package.json`
+- 현재 앱은 아직 `create-next-app` 기본 scaffold에 가까운 상태이며, `app/page.tsx`도 기본 시작 화면입니다.
+- `AGENTS.md`에 따라 Next.js 관련 코드 수정 전에는 필요 시 `node_modules/next/dist/docs/` 문서를 확인합니다.
+- 2026-05-26 02:09 KST 기준 최근 커밋은 `e36df02 2605260208_T-004`입니다.
 
 ## 현재 결정 사항
 
@@ -76,15 +75,12 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 - 다음 작업: **T-005** (프로젝트 폴더 구조 및 공통 모듈 설계)
 - 애플리케이션 코드 변경 없음.
 
-## Git 상태 (2026-05-26)
+## Git 상태 (2026-05-26 02:09 KST)
 
-- `M docs/session-handoff.md`
-- `?? .cursor/`
-- `?? docs/development-plan.md`
-- `?? docs/T-001_mvp-scope.md`
-- `?? docs/T-002_data-model-outline.md`
-- `?? docs/T-003_architecture.md`
-- `?? docs/T-004_security-checklist.md`
+- 현재 브랜치: `main`
+- 원격 저장소: `origin https://github.com/Keunsan/prj_dbmonitoring.git`
+- `git status --short`: 출력 없음, working tree clean
+- 최근 커밋: `e36df02 2605260208_T-004`
 
 ## 이번 세션에서 확인한 내용
 
@@ -105,19 +101,17 @@ PC를 바꾸려고 해. 현재 작업 상태를 `docs/session-handoff.md`에 인
 ## 실행한 명령과 결과
 
 - `git status --short`: 출력 없음, working tree clean.
-- `git diff -- docs/session-handoff.md dbmonitoring/app/globals.css dbmonitoring/package.json dbmonitoring/package-lock.json`: 문서 수정 전 기준 관련 tracked diff 없음.
 - `git branch --show-current`: `main`.
-- `git remote -v`: `origin https://github.com/Keunsan/DBMonitoring.git`.
-- `git log -3 --oneline`: 최근 커밋은 `c135c07 2605221643`, `c6b7054 test`, `15bfed9 main 노트북 test`.
-- 문서 업데이트 후 `git status --short`: `M docs/session-handoff.md`.
-- 보안 요구사항 반영 후 `git status --short`: `M docs/02_requirements_definition.md`, `M docs/session-handoff.md`.
-- 현재 요청에 따라 이 문서를 인수인계용으로 최종 갱신한 뒤 전체 변경분을 커밋하고 `origin/main`으로 푸시한다.
+- `git remote -v`: `origin https://github.com/Keunsan/prj_dbmonitoring.git`.
+- `git log -3 --oneline`: 최근 커밋은 `e36df02 2605260208_T-004`, `0bb5124 test`, `8c99c6a 260526 md files add`.
+- PC 이동 전 요청에 따라 이 문서를 최신 상태로 갱신하고 별도 커밋/푸시한다.
 
 ## 남은 작업과 다음 단계
 
-- MVP 범위를 확정하고, `docs` 기준으로 백엔드/수집/프론트 폴더 구조를 설계한다.
+- 다음 작업은 [development-plan.md](./development-plan.md)의 **T-005: 프로젝트 폴더 구조 및 공통 모듈 설계**입니다.
+- T-005에서는 `app/`, `components/`, `lib/`, `hooks/`, `types/`, Collector/Worker 후보 구조와 공통 보안·RBAC·검증 모듈 경계를 설계합니다.
 - API 목록, DB 스키마 또는 DDL, Collector 인터페이스를 문서화하거나 바로 코드로 시작한다.
-- Next.js 코드 수정 전에는 `dbmonitoring/AGENTS.md` 지침에 따라 필요 시 Next.js 16 문서를 확인한다.
+- Next.js 코드 수정 전에는 `AGENTS.md` 지침에 따라 필요 시 Next.js 16 문서를 확인한다.
 - 인증, 권한, DB 접속, SQL 조회, 수집 설정, 알림 정책, 관리자 기능을 구현할 때는 서버 측 검증, 권한 확인, 감사 로그, 민감 정보 마스킹을 함께 설계한다.
 - 실제 구현을 시작하면 `npm run lint`, 필요 시 `npm run build`를 실행하고 결과를 이 문서에 갱신한다.
 
@@ -143,7 +137,7 @@ PC를 바꾸기 전 이 문서에 아래 내용을 최신화합니다.
 
 ## 유용한 명령
 
-`dbmonitoring`에서:
+저장소 루트에서:
 
 ```bash
 npm run dev
@@ -151,7 +145,7 @@ npm run build
 npm run lint
 ```
 
-저장소 루트에서:
+Git 작업:
 
 ```bash
 git status
@@ -160,5 +154,3 @@ git add docs/session-handoff.md
 git commit -m "Update session handoff"
 git push
 ```
-
-testtest
