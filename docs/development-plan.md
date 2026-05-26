@@ -1,6 +1,6 @@
 # 통합 DB 모니터링 시스템 개발 계획
 
-Last updated: 2026-05-26 KST (T-004 완료)
+Last updated: 2026-05-26 KST (T-006 완료)
 
 ## 1. 문서 목적
 
@@ -31,8 +31,8 @@ Last updated: 2026-05-26 KST (T-004 완료)
 |------|------|
 | Framework | Next.js 16.2.6, React 19.2.4, Tailwind CSS 4 |
 | UI | shadcn/ui, Recharts 설치됨 |
-| 앱 코드 | `create-next-app` 기본 scaffold 수준 |
-| 백엔드/수집/DB | 미구현 |
+| 앱 코드 | T-005 폴더·타입·API health·포털 Route Group 스켈레톤 |
+| 백엔드/수집/DB | `services/collector` 스텁, DB 클라이언트 미연동 |
 | 문서 | PRD, 요구사항, 화면, 수집 항목 정의 완료 |
 
 ### 2.2 기술 스택 결정 (PRD + 프로젝트 규칙)
@@ -73,7 +73,19 @@ Last updated: 2026-05-26 KST (T-004 완료)
 - **작업 내역**: 날짜, 수행자(AGENT), 변경 요약
 - **이슈/결정사항**: blocker, 기술 결정, 미해결 항목
 
-### 3.3 AGENT 작업 원칙
+### 3.3 산출물 네이밍 규칙
+
+TASK별 독립 문서 산출물은 추적과 인수인계를 위해 아래 규칙을 따릅니다.
+
+- 기본 형식: `docs/T-XXX_파일명.md`
+- `T-XXX`는 development-plan의 TASK ID와 반드시 일치시킵니다. 예: `T-005_folder-structure.md`
+- 파일명은 영문 소문자 kebab-case 또는 snake_case를 사용합니다. 기존 문서와의 가독성을 위해 TASK 산출물은 snake_case를 기본으로 합니다.
+- 하나의 TASK에서 산출물 문서가 여러 개인 경우 목적을 분리해 작성합니다. 예: `T-007_api-response-contract.md`, `T-007_error-handling.md`
+- TASK 표의 **산출물** 필드와 작업 내역에는 실제 파일명을 링크로 기록합니다.
+- 코드·컴포넌트·API 파일은 본 규칙 대신 각 영역의 네이밍 규칙(PascalCase 컴포넌트, route.ts 등)을 따릅니다.
+- 기존 `T-001`~`T-005` 산출물은 이 규칙을 기준으로 유지합니다.
+
+### 3.4 AGENT 작업 원칙
 
 1. 작업 시작 전 `docs/PRD.md`, 본 문서, `.cursor/rules/project-rules.mdc`를 확인합니다.
 2. 담당 TASK의 **선행 작업**이 `완료`인지 확인합니다.
@@ -82,7 +94,7 @@ Last updated: 2026-05-26 KST (T-004 완료)
 5. 세션 종료 전 [session-handoff.md](./session-handoff.md)의 현재 목표·다음 단계를 갱신합니다.
 6. Next.js 코드 수정 시 `node_modules/next/dist/docs/` 및 `AGENTS.md`를 따릅니다.
 
-### 3.4 AGENT 시작 프롬프트 (복사용)
+### 3.5 AGENT 시작 프롬프트 (복사용)
 
 ```text
 docs/development-plan.md와 docs/PRD.md를 기준으로 현재 진행 중인 TASK를 이어서 진행해줘.
@@ -129,9 +141,9 @@ flowchart TD
 
 | 항목 | 값 |
 |------|-----|
-| **다음 착수 권장 TASK** | T-005 |
+| **다음 착수 권장 TASK** | T-007 |
 | **현재 Phase** | Phase 1 |
-| **전체 진행률** | 4 / 45 TASK 완료 |
+| **전체 진행률** | 6 / 45 TASK 완료 |
 
 > AGENT는 작업 착수 시 위 표를 갱신합니다.
 
@@ -232,10 +244,11 @@ flowchart TD
 | 목표 | Frontend/Backend/Collector/Shared 타입 구조 확정 |
 | 상세 작업 | `app/`, `components/`, `lib/`, `hooks/`, `types/`, (필요 시) `services/collector/` 등 디렉터리 규칙 정의 |
 | 완료 기준 | 폴더 구조 문서화, 네이밍 규칙(파스칼 케이스 컴포넌트, 화살표 함수) 반영 |
-| 산출물 | README 또는 `docs/folder-structure.md` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-005_folder-structure.md](./T-005_folder-structure.md), [README.md](../README.md) |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-26 AGENT: `docs/T-005_folder-structure.md` 작성. `types/`, `lib/{api,auth,db,rbac,security,validation,audit,constants}`, `services/{collector,processing,alert}`, `components/shared/StatusBadge`, `app/(portal)/dashboard`, `app/api/health`, `scripts/worker/collector.ts` 스켈레톤 추가. README 프로젝트 섹션 갱신. `npm run build` — 신규 코드 컴파일 성공, 기존 `calendar.tsx` 타입 오류로 전체 빌드 실패. |
+| 이슈/결정사항 | Import 경계: `services/` → React 금지. Health API는 T-007 전 선행 스켈레톤. `npm run lint`는 shadcn `carousel.tsx`·`use-mobile.ts` 기존 오류 2건(본 TASK 범위 외). TASK 산출물 문서는 `docs/T-XXX_파일명.md` 네이밍 규칙 적용. |
 
 ---
 
@@ -251,9 +264,10 @@ flowchart TD
 | 상세 작업 | shadcn/ui 기반 AppShell, 메뉴 골격(§4.1 메뉴 구조), 공통 EmptyState/ErrorState/LoadingSkeleton |
 | 완료 기준 | 레이아웃 컴포넌트 동작, 한글 오류 메시지 패턴 적용 |
 | 산출물 | `components/layout/*`, `app/(portal)/layout.tsx` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-26 AGENT: `components/layout/AppShell.tsx`, `AppSidebar.tsx`, `AppHeader.tsx`, `PageHeader.tsx` 구현. `components/shared/EmptyState.tsx`, `ErrorState.tsx`, `LoadingSkeleton.tsx`, `StatusBadge.tsx` 스타일 확장. `app/(portal)/layout.tsx`에 AppShell 적용, `/dashboard` 플레이스홀더에서 공통 컴포넌트 렌더링 확인. |
+| 이슈/결정사항 | `npx eslint "components/layout" "components/shared" "app/(portal)"` 통과. `npm run lint`는 기존 `components/ui/carousel.tsx`, `hooks/use-mobile.ts` 오류로 실패. `npm run build`는 T-006 타입 이슈 수정 후 기존 `components/ui/calendar.tsx` 타입 오류에서 실패. `node_modules/next/dist/docs/` 문서 파일은 패키지 내 존재하지 않아 확인 불가. |
 
 ---
 
@@ -1079,3 +1093,5 @@ docs/PRD.md, docs/session-handoff.md, .cursor/rules/project-rules.mdc도 함께 
 | 2026-05-26 | T-002 완료 — T-002_data-model-outline.md 추가 | AGENT |
 | 2026-05-26 | T-003 완료 — T-003_architecture.md 추가 | AGENT |
 | 2026-05-26 | T-004 완료 — T-004_security-checklist.md 추가 | AGENT |
+| 2026-05-26 | T-005 완료 — T-005_folder-structure.md, types/lib/services 스켈레톤 | AGENT |
+| 2026-05-26 | T-006 완료 — AppShell, Sidebar/Header, 공통 상태 UI 구현 | AGENT |
