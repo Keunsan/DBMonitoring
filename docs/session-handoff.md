@@ -34,6 +34,7 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - Framework: Next.js `16.2.6`, React `19.2.4`, Tailwind CSS `4`
 - **T-001~T-006 완료** (Phase 0 + Phase 1 공통 레이아웃)
 - 폴더 구조: [T-005_folder-structure.md](./T-005_folder-structure.md)
+- 공통 UI 레이아웃: [T-006_common-ui-layout.md](./T-006_common-ui-layout.md)
 - Health API: `GET /api/health` — `{ data, error, meta }` 형식
 - 포털 AppShell: `components/layout/*`, `/dashboard` 플레이스홀더
 
@@ -51,14 +52,14 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 
 - `npm install` — 성공
 - `npx eslint "components/layout" "components/shared" "app/(portal)"` — 성공
-- `npm run lint` — 실패 2건 (기존 `carousel.tsx`, `use-mobile.ts`)
-- `npm run build` — T-006 타입 이슈 수정 후 기존 `components/ui/calendar.tsx` 타입 오류에서 실패
+- `npm run lint` — 성공
+- `npm run build` — 성공
 
 ## 남은 작업과 다음 단계
 
 1. **T-007**: API 규약·middleware (`lib/api` 확장)
 2. **T-008**: `.env.example`, Supabase 클라이언트
-3. (선택) `calendar.tsx`, `carousel.tsx`, `use-mobile.ts` 기존 검증 오류 수정
+3. T-007 착수 전 필요 시 현재 T-005~T-006 변경사항 커밋
 
 ## 주의할 점
 

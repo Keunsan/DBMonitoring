@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { AppSidebar } from "@/components/layout/AppSidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 type AppShellProps = {
   children: ReactNode;
@@ -17,12 +18,14 @@ type AppShellProps = {
  */
 export const AppShell = ({ children }: AppShellProps) => {
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        <AppHeader />
-        <div className="flex flex-1 flex-col bg-muted/20">{children}</div>
-      </SidebarInset>
-    </SidebarProvider>
+    <TooltipProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <AppHeader />
+          <div className="flex flex-1 flex-col bg-muted/20">{children}</div>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 };

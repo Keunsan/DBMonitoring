@@ -263,11 +263,11 @@ flowchart TD
 | 목표 | 운영 포털 공통 레이아웃, 사이드바, 헤더, 상태 배지, 로딩/빈/오류 UI |
 | 상세 작업 | shadcn/ui 기반 AppShell, 메뉴 골격(§4.1 메뉴 구조), 공통 EmptyState/ErrorState/LoadingSkeleton |
 | 완료 기준 | 레이아웃 컴포넌트 동작, 한글 오류 메시지 패턴 적용 |
-| 산출물 | `components/layout/*`, `app/(portal)/layout.tsx` |
+| 산출물 | [T-006_common-ui-layout.md](./T-006_common-ui-layout.md), `components/layout/*`, `components/shared/*`, `app/(portal)/layout.tsx` |
 | 진행 상태 | `완료` |
 | 완료 여부 | ☑ |
-| 작업 내역 | 2026-05-26 AGENT: `components/layout/AppShell.tsx`, `AppSidebar.tsx`, `AppHeader.tsx`, `PageHeader.tsx` 구현. `components/shared/EmptyState.tsx`, `ErrorState.tsx`, `LoadingSkeleton.tsx`, `StatusBadge.tsx` 스타일 확장. `app/(portal)/layout.tsx`에 AppShell 적용, `/dashboard` 플레이스홀더에서 공통 컴포넌트 렌더링 확인. |
-| 이슈/결정사항 | `npx eslint "components/layout" "components/shared" "app/(portal)"` 통과. `npm run lint`는 기존 `components/ui/carousel.tsx`, `hooks/use-mobile.ts` 오류로 실패. `npm run build`는 T-006 타입 이슈 수정 후 기존 `components/ui/calendar.tsx` 타입 오류에서 실패. `node_modules/next/dist/docs/` 문서 파일은 패키지 내 존재하지 않아 확인 불가. |
+| 작업 내역 | 2026-05-26 AGENT: `components/layout/AppShell.tsx`, `AppSidebar.tsx`, `AppHeader.tsx`, `PageHeader.tsx` 구현. `components/shared/EmptyState.tsx`, `ErrorState.tsx`, `LoadingSkeleton.tsx`, `StatusBadge.tsx` 스타일 확장. `app/(portal)/layout.tsx`에 AppShell 적용, `/dashboard` 플레이스홀더에서 공통 컴포넌트 렌더링 확인. `docs/T-006_common-ui-layout.md` 산출물 요약 추가. |
+| 이슈/결정사항 | 2026-05-26 기존 shadcn/ui 호환 이슈 해결: `hooks/use-mobile.ts`와 `components/ui/carousel.tsx`는 React 19 lint 규칙에 맞춰 `useSyncExternalStore` 기반으로 변경, `components/ui/calendar.tsx`는 react-day-picker v10 classNames(`month_grid`)로 변경. `AppShell`에 `TooltipProvider` 추가. `npm run lint`, `npm run build` 통과. `node_modules/next/dist/docs/` 경로 존재 확인. |
 
 ---
 
