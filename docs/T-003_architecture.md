@@ -19,14 +19,14 @@ Last updated: 2026-05-26 KST
 |------|------|------|
 | 저장소 구조 | 현재 Next.js 앱 중심으로 시작, Collector/Worker는 같은 repo 내 모듈로 분리 | 초기 속도와 AGENT 인수인계 단순화 |
 | API | Next.js Route Handlers 우선 | 현재 repo가 Next.js 16 App Router 기반이며 MVP API 범위가 명확함 |
-| Collector | 별도 Worker 프로세스로 실행 가능한 모듈 구조 | 추후 NestJS/독립 서비스 분리 가능 |
+| Collector | 별도 Worker 프로세스로 실행 가능한 모듈 구조 | Next.js 앱과 같은 repo에서 독립 실행 가능하게 분리 |
 | 실시간 갱신 | 1차는 polling 또는 SSE, WebSocket은 후속 확장 가능 | Next.js 환경에서 구현 난도와 운영 부담 절충 |
 | Queue | 1차는 in-process scheduler, 부하 증가 시 Redis/BullMQ | PRD의 Redis/BullMQ는 확장 단계로 반영 |
 | 운영 DB | Supabase(PostgreSQL) 우선 | 프로젝트 규칙 및 Auth/DB 연계 |
 | 시계열 | PostgreSQL 파티션으로 시작, TimescaleDB 호환 구조 유지 | 인프라 확정 전 MVP 구현 가능 |
 | DBMS 수집 | MSSQL Agentless 완전 구현, Oracle/Azure는 어댑터 인터페이스만 | T-001 MVP 범위 |
 
-> NestJS 별도 백엔드와 Redis/BullMQ는 PRD의 최종 구조와 맞지만, 1차 MVP에서는 Next.js API + 분리 가능한 Worker 모듈로 시작합니다. T-005에서 실제 폴더 구조로 확정합니다.
+> 백엔드 프레임워크는 Next.js로 통합하고, API는 Route Handlers 중심으로 구현합니다. 장시간 수집 작업은 Next.js 요청 생명주기와 분리될 수 있도록 Worker 모듈로 독립 실행 가능하게 둡니다.
 
 ---
 
@@ -264,7 +264,7 @@ sequenceDiagram
 | 항목 | 결정 |
 |------|------|
 | 1차 구현 구조 | Next.js API + 분리 가능한 Worker 모듈 |
-| NestJS | PRD 최종 목표로 유지하되 MVP에서는 도입 보류 |
+| Backend Framework | Next.js 16 App Router로 통합 |
 | Queue | MVP에서는 선택, Collector 부하 증가 시 Redis/BullMQ 도입 |
 | 실시간 | polling/SSE 우선, WebSocket은 필요 시 확장 |
 | DBMS | MSSQL 구현, Oracle/Azure는 인터페이스 |

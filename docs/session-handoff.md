@@ -31,22 +31,25 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 
 ## 현재 프로젝트 상태
 
-- Framework: Next.js `16.2.6`, React `19.2.4`, Tailwind CSS `4`
-- **T-001~T-006 완료** (Phase 0 + Phase 1 공통 레이아웃)
+- Framework: Next.js `16.2.6`, React `19.2.4`
+- Styling/UI: Tailwind CSS `4`, Shadcn/ui
+- Lint: ESLint `9` + `eslint-config-next` `16.2.6` (Next/TS 규칙 기반)
+- **T-001~T-007 완료** (Phase 0 + Phase 1 API 스켈레톤)
 - 폴더 구조: [T-005_folder-structure.md](./T-005_folder-structure.md)
 - 공통 UI 레이아웃: [T-006_common-ui-layout.md](./T-006_common-ui-layout.md)
-- Health API: `GET /api/health` — `{ data, error, meta }` 형식
+- API 응답 규약: [T-007_api-contract.md](./T-007_api-contract.md)
+- Health API: `GET /api/health` — `{ data, error, meta }` + `requestId` 형식
 - 포털 AppShell: `components/layout/*`, `/dashboard` 플레이스홀더
 
 ## 현재 목표
 
-- **다음 작업: T-007** (API 스켈레톤 및 공통 응답 규약)
-- T-007 산출물: `app/api/health/route.ts` 확장 또는 `backend/` 스켈레톤, 공통 middleware/에러 핸들러
+- **다음 작업: T-008** (환경 변수 및 시크릿 관리 체계)
+- T-008 산출물: `.env.example`, README 환경 설정 절, secret ref 및 로그 마스킹 규칙
 
 ## Git 상태 (2026-05-26)
 
 - 브랜치: `main`
-- T-005~T-006 구현 후 커밋 전 — `git status`로 변경 파일 확인 필요
+- T-007 구현 후 커밋 전 — `git status`로 변경 파일 확인 필요
 
 ## 실행한 명령과 결과
 
@@ -54,12 +57,13 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - `npx eslint "components/layout" "components/shared" "app/(portal)"` — 성공
 - `npm run lint` — 성공
 - `npm run build` — 성공
+- T-007 후 `npm run lint`, `npm run build` — 성공
 
 ## 남은 작업과 다음 단계
 
-1. **T-007**: API 규약·middleware (`lib/api` 확장)
-2. **T-008**: `.env.example`, Supabase 클라이언트
-3. T-007 착수 전 필요 시 현재 T-005~T-006 변경사항 커밋
+1. **T-008**: `.env.example`, Supabase/SSO/ERP 테스트 DB 환경 변수 문서화
+2. **T-009/T-010**: SSO/RBAC에서 `withApiHandler` 기반 권한 검증 확장
+3. 필요 시 현재 T-007 변경사항 커밋
 
 ## 주의할 점
 

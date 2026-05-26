@@ -2,6 +2,10 @@
 
 import type { ApiError, ApiMeta, ApiResponse } from "@/types/api";
 
+export type ApiJsonInit = ResponseInit & {
+  meta?: ApiMeta;
+};
+
 /**
  * 성공 응답 본문을 생성합니다.
  * @param data - 응답 데이터
@@ -25,3 +29,30 @@ export const apiFailure = (
   error: { code, message } satisfies ApiError,
   ...(meta ? { meta } : {}),
 });
+
+/**
+ * 성공 JSON 응답을 반환합니다.
+ */
+export const jsonSuccess = <T>(
+  data: T,
+  { meta, ...init }: ApiJsonInit = {},
+): Response => {
+  return Response.json(apiSuccess(data, meta), {
+    status: init.status ?? 200,
+    headers: init.headers,
+  });
+};
+
+/**
+ * 실패 JSON 응답을 반환합니다.
+ */
+export const jsonFailure = (
+  code: string,
+  message: string,
+  { meta, ...init }: ApiJsonInit = {},
+): Response => {
+  return Response.json(apiFailure(code, message, meta), {
+    status: init.status ?? 500,
+    headers: init.headers,
+  });
+};

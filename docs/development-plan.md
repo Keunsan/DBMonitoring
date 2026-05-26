@@ -1,6 +1,6 @@
 # 통합 DB 모니터링 시스템 개발 계획
 
-Last updated: 2026-05-26 KST (T-006 완료)
+Last updated: 2026-05-26 KST (T-007 완료)
 
 ## 1. 문서 목적
 
@@ -29,8 +29,11 @@ Last updated: 2026-05-26 KST (T-006 완료)
 
 | 항목 | 상태 |
 |------|------|
-| Framework | Next.js 16.2.6, React 19.2.4, Tailwind CSS 4 |
-| UI | shadcn/ui, Recharts 설치됨 |
+| Framework | Next.js 16.2.6, React 19.2.4 |
+| Styling | Tailwind CSS 4 |
+| UI Component | Shadcn/ui 설치됨 |
+| Lint | ESLint 9 + eslint-config-next 16.2.6 |
+| Chart | Recharts 설치됨 |
 | 앱 코드 | T-005 폴더·타입·API health·포털 Route Group 스켈레톤 |
 | 백엔드/수집/DB | `services/collector` 스텁, DB 클라이언트 미연동 |
 | 문서 | PRD, 요구사항, 화면, 수집 항목 정의 완료 |
@@ -39,14 +42,17 @@ Last updated: 2026-05-26 KST (T-006 완료)
 
 | 영역 | 기술 | 비고 |
 |------|------|------|
-| Frontend | Next.js 16 App Router, TypeScript, Tailwind, shadcn/ui | 현재 저장소 기준 |
+| Frontend | Next.js 16 App Router, TypeScript | 현재 저장소 기준 |
+| Styling | Tailwind CSS | 기존 스타일링 기준 유지 |
+| UI Component | Shadcn/ui | `components/ui` 패턴 우선 |
+| Lint | ESLint (Next/TS 규칙 기반) | `npm run lint` 기준 |
 | 상태 관리 | React Query(또는 TanStack Query), Zustand | PRD 권장 |
 | 차트 | Recharts (설치됨) 또는 ECharts | PRD 선택 |
 | 운영 DB | Supabase(PostgreSQL) 또는 PostgreSQL | 프로젝트 규칙 기준 Supabase 우선 검토 |
 | 시계열 | TimescaleDB | PRD 권장, Phase 5에서 확정 |
 | 인증 | SSO + JWT | NFR-004 |
 | 수집 | Agent / Agentless / API | 1차 MSSQL Agentless 우선 |
-| 백엔드 API | NestJS (PRD) 또는 Next.js Route Handlers + 별도 Worker | Phase 1에서 구조 확정 필요 |
+| 백엔드 API | Next.js Route Handlers + 별도 Worker | Next.js 풀스택 기준 |
 
 ---
 
@@ -141,9 +147,9 @@ flowchart TD
 
 | 항목 | 값 |
 |------|-----|
-| **다음 착수 권장 TASK** | T-007 |
+| **다음 착수 권장 TASK** | T-008 |
 | **현재 Phase** | Phase 1 |
-| **전체 진행률** | 6 / 45 TASK 완료 |
+| **전체 진행률** | 7 / 45 TASK 완료 |
 
 > AGENT는 작업 착수 시 위 표를 갱신합니다.
 
@@ -207,7 +213,7 @@ flowchart TD
 | 진행 상태 | `완료` |
 | 완료 여부 | ☑ |
 | 작업 내역 | 2026-05-26 AGENT: PRD §6 기준으로 Frontend, API, Collector, Processing, Storage, Alert, Notification, Auth/RBAC/Audit 경계와 데이터 흐름, 1차 API, 배포 단위 작성. |
-| 이슈/결정사항 | 1차 MVP는 Next.js Route Handlers + 분리 가능한 Worker 모듈로 시작. NestJS/Redis/BullMQ는 확장 단계로 보류. |
+| 이슈/결정사항 | Backend Framework는 Next.js 16 App Router로 통합. API는 Route Handlers, 장시간 수집/처리는 분리 가능한 Worker 모듈로 구현. Redis/BullMQ는 부하 증가 시 확장 단계에서 검토. |
 
 ---
 
@@ -280,12 +286,13 @@ flowchart TD
 | 후행 작업 | T-011~T-027 |
 | Phase | 1 |
 | 목표 | REST API 기본 구조, 에러 응답, 페이징 규약 정의 |
-| 상세 작업 | Route Handlers 또는 NestJS 프로젝트 초기화, `{ data, error, meta }` 응답 형식, 한글 사용자 메시지 |
+| 상세 작업 | Next.js Route Handlers API 구조, `{ data, error, meta }` 응답 형식, 한글 사용자 메시지 |
 | 완료 기준 | Health check API, 공통 middleware/에러 핸들러 동작 |
-| 산출물 | `app/api/health/route.ts` 또는 `backend/` 스켈레톤 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-007_api-contract.md](./T-007_api-contract.md), `app/api/health/route.ts`, `lib/api/*`, `lib/validation/*` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-26 AGENT: Next.js Route Handler 문서 확인 후 `lib/api/{response,errors,handler,pagination}.ts`, `lib/validation/index.ts` 확장. `app/api/health/route.ts`와 개발용 `app/api/dev/erp-test/connection/route.ts`를 공통 응답 규약으로 정렬. `docs/T-007_api-contract.md` 작성. |
+| 이슈/결정사항 | API 응답은 `{ data, error, meta }`와 `requestId` meta를 기본으로 사용. 예상 오류는 `ApiRouteError`, 알 수 없는 오류는 서버 로그 후 한글 일반 메시지로 반환. `npm run lint`, `npm run build` 통과. |
 
 ---
 
@@ -1095,3 +1102,4 @@ docs/PRD.md, docs/session-handoff.md, .cursor/rules/project-rules.mdc도 함께 
 | 2026-05-26 | T-004 완료 — T-004_security-checklist.md 추가 | AGENT |
 | 2026-05-26 | T-005 완료 — T-005_folder-structure.md, types/lib/services 스켈레톤 | AGENT |
 | 2026-05-26 | T-006 완료 — AppShell, Sidebar/Header, 공통 상태 UI 구현 | AGENT |
+| 2026-05-26 | T-007 완료 — API 응답 규약, 공통 에러 핸들러, Health API 정렬 | AGENT |

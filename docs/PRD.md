@@ -307,18 +307,20 @@ DB(MSSQL/Oracle/Azure SQL)
 ## 7.1 Frontend
 | 항목 | 기술 |
 |---|---|
-| Framework | Next.js 16 |
+| Framework | Next.js 16 App Router |
 | Language | TypeScript |
-| UI | Tailwind CSS |
+| Styling | Tailwind CSS |
+| UI Component | Shadcn/ui |
 | State | Zustand / React Query |
 | Chart | ECharts 또는 Recharts |
+| Lint | ESLint (Next/TS 규칙 기반) |
 
 ## 7.2 Backend
 | 항목 | 기술 |
 |---|---|
 | Runtime | Node.js |
-| Framework | NestJS |
-| API | REST + WebSocket |
+| Framework | Next.js 16 App Router |
+| API | Route Handlers 기반 REST API + 필요 시 SSE/WebSocket |
 | Auth | JWT + SSO |
 | Queue | Redis / BullMQ |
 
