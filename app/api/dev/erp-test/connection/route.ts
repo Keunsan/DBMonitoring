@@ -1,27 +1,14 @@
 /** 개발 환경에서 ERP 테스트 DB 연결 상태를 확인하는 API입니다. */
 
 import { ApiRouteError, notFound, withApiHandler } from "@/lib/api";
-import { getErpTestDbConfig, testErpTestDbConnection } from "@/lib/db/erp-test";
+import {
+  getErpConnectionFailureMessage,
+  getErpTestDbConfig,
+  testErpTestDbConnection,
+} from "@/lib/db/erp-test";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const toConnectionFailureMessage = (error: unknown): string => {
-  const code =
-    typeof error === "object" && error !== null && "code" in error
-      ? String(error.code)
-      : "";
-
-  if (code === "ELOGIN") {
-    return "ERP 테스트 DB 로그인에 실패했습니다. 계정, 비밀번호, DB 권한을 확인해주세요.";
-  }
-
-  if (code === "ETIMEOUT" || code === "ESOCKET" || code === "EINSTLOOKUP") {
-    return "ERP 테스트 DB에 접속할 수 없습니다. 호스트, 포트, 방화벽, VPN 연결 상태를 확인해주세요.";
-  }
-
-  return "ERP 테스트 DB 연결 확인 중 오류가 발생했습니다. 서버 로그와 연결 설정을 확인해주세요.";
-};
 
 /**
  * ERP 테스트 DB 연결 확인 결과를 반환합니다.
@@ -68,7 +55,7 @@ export const GET = withApiHandler(async () => {
 
     throw new ApiRouteError({
       code: "ERP_TEST_DB_CONNECTION_FAILED",
-      message: toConnectionFailureMessage(error),
+      message: getErpConnectionFailureMessage(error),
       status: 502,
       cause: error,
     });

@@ -5,7 +5,7 @@ import type { CollectStatus, DbHealth } from "@/types/domain";
 import { cn } from "@/lib/utils";
 
 type StatusBadgeProps = {
-  kind: "health" | "collect";
+  kind: "health" | "collect" | "connection";
   value: DbHealth | CollectStatus;
   className?: string;
 };
@@ -21,6 +21,12 @@ const COLLECT_LABELS: Record<CollectStatus, string> = {
   OK: "수집 정상",
   FAIL: "수집 실패",
   DELAYED: "수집 지연",
+};
+
+const CONNECTION_LABELS: Record<CollectStatus, string> = {
+  OK: "연결 정상",
+  FAIL: "연결 실패",
+  DELAYED: "연결 지연",
 };
 
 const STATUS_STYLES: Record<DbHealth | CollectStatus, string> = {
@@ -40,7 +46,9 @@ export const StatusBadge = ({ kind, value, className }: StatusBadgeProps) => {
   const label =
     kind === "health"
       ? HEALTH_LABELS[value as DbHealth]
-      : COLLECT_LABELS[value as CollectStatus];
+      : kind === "connection"
+        ? CONNECTION_LABELS[value as CollectStatus]
+        : COLLECT_LABELS[value as CollectStatus];
 
   return (
     <Badge variant="outline" className={cn(STATUS_STYLES[value], className)}>

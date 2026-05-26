@@ -23,6 +23,8 @@ export type BusinessSystem = {
   name: string;
   importance: ImportanceLevel;
   ownerDept: string | null;
+  ownerName: string | null;
+  ownerEmail: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -48,6 +50,8 @@ export type DbInstance = {
   connectionSecretRef: string;
   lastCollectAt: string | null;
   lastCollectStatus: CollectStatus | null;
+  lastConnectionTestAt: string | null;
+  lastConnectionTestStatus: CollectStatus | null;
   createdAt: string;
   updatedAt: string;
 };

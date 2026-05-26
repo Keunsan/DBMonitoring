@@ -1,6 +1,6 @@
 # 통합 DB 모니터링 시스템 개발 계획
 
-Last updated: 2026-05-26 KST (T-007 완료)
+Last updated: 2026-05-26 KST (T-011~T-013 완료, Phase 2 보류)
 
 ## 1. 문서 목적
 
@@ -147,9 +147,9 @@ flowchart TD
 
 | 항목 | 값 |
 |------|-----|
-| **다음 착수 권장 TASK** | T-008 |
-| **현재 Phase** | Phase 1 |
-| **전체 진행률** | 7 / 45 TASK 완료 |
+| **다음 착수 권장 TASK** | T-014 |
+| **현재 Phase** | Phase 3 완료 / Phase 2 보류 |
+| **전체 진행률** | 11 / 45 TASK 완료 |
 
 > AGENT는 작업 착수 시 위 표를 갱신합니다.
 
@@ -307,10 +307,11 @@ flowchart TD
 | 목표 | `.env` 템플릿, 비밀 정보 분리, 개발/운영 환경 구분 |
 | 상세 작업 | `.env.example` 작성, Supabase/SSO/DB 연결 변수 정의, 로그 마스킹 규칙 |
 | 완료 기준 | `.env.example` 존재, 문서에 필수 변수 목록 기재 |
-| 산출물 | `.env.example`, README 환경 설정 절 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-008_environment-secrets.md](./T-008_environment-secrets.md), `.env.example`, README 환경 설정 절, `lib/env/*`, `lib/security/*` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-26 AGENT: `.env.example` 작성, `.gitignore`에 `.env.example` 예외 추가. `lib/env/index.ts`로 환경 변수 읽기·필수 변수 검증·Secret Provider 설정 추가. `lib/security/mask.ts` 로그 마스킹 유틸 확장. `lib/db/index.ts` 운영 DB 설정 상태 확인 로직 반영. README 환경 설정 절과 `docs/T-008_environment-secrets.md` 작성. |
+| 이슈/결정사항 | 실제 `.env.local`은 민감 정보가 있을 수 있어 읽지 않음. 1차 개발/로컬 Secret Provider는 `env_local`, 운영 후보는 Supabase Vault 우선 검토 후 T-012에서 최종 확정. `.env*`는 계속 ignore하고 `.env.example`만 커밋 가능. |
 
 ---
 
@@ -329,10 +330,10 @@ flowchart TD
 | 상세 작업 | SSO Provider 연동, 콜백 처리, HttpOnly/SameSite 쿠키, 개발 환경 mock 로그인 |
 | 완료 기준 | 로그인/로그아웃 E2E, 미인증 접근 차단 |
 | 산출물 | `lib/auth/*`, `app/api/auth/*` |
-| 진행 상태 | `대기` |
+| 진행 상태 | `보류` |
 | 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
-| 이슈/결정사항 | SSO 벤더·테스트 계정 확보 필요 |
+| 작업 내역 | 2026-05-26 USER 요청: Phase 2는 일단 보류하고 Phase 3(T-011~T-013)을 선진행. |
+| 이슈/결정사항 | SSO 벤더·테스트 계정 확보 필요. Phase 3 API/UI는 T-010 권한 검증 연결 지점을 남기고 개발용으로 진행. |
 
 ---
 
@@ -349,9 +350,9 @@ flowchart TD
 | 상세 작업 | 역할(시스템관리자, DBA, 운영자, 개발자, 보안, 조회) 정의, middleware 권한 검증, 화면 §5 권한 제안 반영 |
 | 완료 기준 | 역할별 메뉴 노출 차등, API 서버 측 권한 검증 |
 | 산출물 | 권한 테이블 스키마, `lib/rbac/*` |
-| 진행 상태 | `대기` |
+| 진행 상태 | `보류` |
 | 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 작업 내역 | 2026-05-26 USER 요청: Phase 2 보류. Phase 3 선진행으로 API 서버 측 RBAC 검증은 후속 연결 예정. |
 
 ---
 
@@ -369,10 +370,11 @@ flowchart TD
 | 목표 | 업무 시스템, 담당자, 중요도 등 메타 데이터 관리 |
 | 상세 작업 | CRUD API, 관리 화면, DB 인스턴스 등록 시 매핑 |
 | 완료 기준 | 업무 시스템 등록·조회·수정·삭제 동작 |
-| 산출물 | API + 관리 화면 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-011_business-system-master.md](./T-011_business-system-master.md), `app/api/business-systems/*`, `components/features/admin/DbInstanceManagementClient.tsx` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-26 AGENT: `app/api/business-systems` CRUD API, `lib/inventory/store.ts` 개발용 메모리 저장소, 시스템 관리 > DB 인스턴스 관리 화면 내 업무 시스템 등록 폼 구현. |
+| 이슈/결정사항 | T-010 보류로 권한 차등은 미적용. T-010 재개 시 `withApiHandler` 기반 권한 검증 추가 필요. |
 
 ---
 
@@ -388,10 +390,11 @@ flowchart TD
 | 목표 | DBMS 유형, 호스트, 포트, 수집 방식, 수집 주기, 연결 테스트 |
 | 상세 작업 | 등록 폼, 연결 테스트 API, 접속 정보 암호화 저장, 수집 활성화 토글 |
 | 완료 기준 | MSSQL 인스턴스 등록 후 연결 테스트 성공/실패 한글 안내 |
-| 산출물 | DB 인스턴스 관리 화면, API |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-012_db-instance-management.md](./T-012_db-instance-management.md), `app/api/db-instances/*`, `app/api/db-instances/[id]/test-connection/route.ts` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-26 AGENT: DB 인스턴스 등록/수정/삭제 API, 관리 화면 등록 폼/목록, MSSQL 연결 테스트 API 구현. `connectionSecretRef`만 저장하고 실제 비밀번호는 환경 변수/Secret Provider에 유지. |
+| 이슈/결정사항 | 개발 단계 실제 연결 테스트는 `connectionSecretRef=env:ERP_TEST_DB`인 MSSQL만 지원. Oracle/Azure SQL은 T-017/T-018 어댑터 후 확장. |
 
 ---
 
@@ -407,10 +410,11 @@ flowchart TD
 | 목표 | DB별 수집 주기(5~60초), SQL 집계 주기, 활성화 관리 |
 | 상세 작업 | 수집 스케줄 설정 UI, Collector ID 매핑, 수집 상태 표시 |
 | 완료 기준 | 인스턴스별 수집 주기 저장 및 Collector에 반영 |
-| 산출물 | 수집 설정 API/UI |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-013_collection-settings.md](./T-013_collection-settings.md), `app/api/db-instances/[id]/collection-settings/route.ts` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-26 AGENT: 인스턴스별 수집 주기(5~60초), SQL 집계 주기(60~300초), Collector ID, 활성화 상태 조회/수정 API와 화면 토글 구현. |
+| 이슈/결정사항 | 현재는 개발용 메모리 저장소에 반영. 실제 Collector scheduler 반영은 T-016에서 `services/collector/scheduler`와 연결. |
 
 ---
 
@@ -1103,3 +1107,5 @@ docs/PRD.md, docs/session-handoff.md, .cursor/rules/project-rules.mdc도 함께 
 | 2026-05-26 | T-005 완료 — T-005_folder-structure.md, types/lib/services 스켈레톤 | AGENT |
 | 2026-05-26 | T-006 완료 — AppShell, Sidebar/Header, 공통 상태 UI 구현 | AGENT |
 | 2026-05-26 | T-007 완료 — API 응답 규약, 공통 에러 핸들러, Health API 정렬 | AGENT |
+| 2026-05-26 | T-008 완료 — 환경 변수 템플릿, Secret Provider, 로그 마스킹 규칙 | AGENT |
+| 2026-05-26 | Phase 2 보류, T-011~T-013 완료 — DB 인스턴스 관리 API/UI 골격 | AGENT |

@@ -88,7 +88,7 @@ export const getErpTestDbConfig = (): ErpTestDbConfigResult => {
   const user = getRequiredEnv("ERP_TEST_DB_USER") as string;
   const password = getRequiredEnv("ERP_TEST_DB_PASSWORD") as string;
   const port = parseNumberEnv(process.env.ERP_TEST_DB_PORT, DEFAULT_PORT);
-  const encrypt = parseBooleanEnv(process.env.ERP_TEST_DB_ENCRYPT, false);
+  const encrypt = parseBooleanEnv(process.env.ERP_TEST_DB_ENCRYPT, true);
   const trustServerCertificate = parseBooleanEnv(
     process.env.ERP_TEST_DB_TRUST_SERVER_CERTIFICATE,
     true,
@@ -128,6 +128,26 @@ export const getErpTestDbConfig = (): ErpTestDbConfigResult => {
       trustServerCertificate,
     },
   };
+};
+
+/**
+ * ERP 테스트 DB 연결 오류 코드에 맞는 한글 안내 문구를 반환합니다.
+ */
+export const getErpConnectionFailureMessage = (error: unknown): string => {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String(error.code)
+      : "";
+
+  if (code === "ELOGIN") {
+    return "DB 로그인에 실패했습니다. 계정, 비밀번호, DB 권한을 확인해주세요.";
+  }
+
+  if (code === "ETIMEOUT" || code === "ESOCKET" || code === "EINSTLOOKUP") {
+    return "DB에 접속할 수 없습니다. 호스트, 포트, 방화벽, VPN, TLS(ERP_TEST_DB_ENCRYPT) 설정을 확인해주세요.";
+  }
+
+  return "DB 연결 확인 중 오류가 발생했습니다. 서버 로그와 연결 설정을 확인해주세요.";
 };
 
 /**
