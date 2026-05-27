@@ -438,7 +438,11 @@ export const updateCollectionSettings = (
   id: string,
   input: CollectionSettingsInput,
 ) => {
-  const instance = getDbInstance(id);
+  const instance = getState().dbInstances.find((item) => item.id === id);
+
+  if (!instance) {
+    throw notFound("DB 인스턴스를 찾을 수 없습니다.");
+  }
 
   Object.assign(instance, {
     collectorId: input.collectorId ?? null,
@@ -451,8 +455,13 @@ export const updateCollectionSettings = (
   return instance;
 };
 
-const updateCollectStatus = (id: string, status: CollectStatus) => {
-  const instance = getDbInstance(id);
+export const updateCollectStatus = (id: string, status: CollectStatus) => {
+  const instance = getState().dbInstances.find((item) => item.id === id);
+
+  if (!instance) {
+    throw notFound("DB 인스턴스를 찾을 수 없습니다.");
+  }
+
   instance.lastCollectStatus = status;
   instance.lastCollectAt = now();
   instance.updatedAt = now();

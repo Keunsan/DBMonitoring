@@ -12,23 +12,31 @@ export type CollectorContext = {
   dbInstanceId: DbInstanceId;
   dbmsType: DbmsType;
   connectionSecretRef: string;
+  databaseName: string | null;
+  instanceName: string;
 };
 
 /** DBMS별 수집 어댑터 공통 인터페이스 */
-export type CollectorAdapter = {
-  testConnection: () => Promise<ConnectionTestResult>;
+export type ICollectorAdapter = {
+  connect: () => Promise<ConnectionTestResult>;
   collectAvailability: () => Promise<AvailabilityPayload>;
   collectMetrics: () => Promise<MetricPayload[]>;
   collectSessions: () => Promise<SessionPayload[]>;
   collectLocks: () => Promise<BlockingPayload[]>;
   collectDeadlocks: () => Promise<DeadlockPayload[]>;
-  collectTopSql: () => Promise<SqlPerformancePayload[]>;
+  collectSql: () => Promise<SqlPerformancePayload[]>;
 };
+
+export type CollectorAdapter = ICollectorAdapter;
 
 export type AvailabilityPayload = {
   collectTime: string;
   isReachable: boolean;
   healthMessage?: string;
+  latencyMs?: number;
+  serverName?: string | null;
+  databaseName?: string | null;
+  version?: string | null;
 };
 
 export type MetricPayload = {
@@ -36,6 +44,7 @@ export type MetricPayload = {
   metricName: string;
   metricValue: number;
   unit?: string;
+  tags?: Record<string, string>;
 };
 
 export type SessionPayload = {
@@ -46,6 +55,9 @@ export type SessionPayload = {
   waitType: string | null;
   waitMs: number | null;
   sqlId: string | null;
+  hostName?: string | null;
+  programName?: string | null;
+  databaseName?: string | null;
 };
 
 export type BlockingPayload = {
@@ -70,8 +82,24 @@ export type SqlPerformancePayload = {
   executions: number;
   avgElapsedMs: number;
   totalCpuMs: number;
+  totalLogicalReads?: number;
+  lastExecutionTime?: string | null;
 };
 
 export type CollectorAdapterFactory = (
   context: CollectorContext,
 ) => CollectorAdapter;
+
+export type CollectorRunResult = {
+  dbInstanceId: DbInstanceId;
+  startedAt: string;
+  finishedAt: string;
+  status: "OK" | "FAIL";
+  availability: AvailabilityPayload | null;
+  metrics: MetricPayload[];
+  sessions: SessionPayload[];
+  locks: BlockingPayload[];
+  deadlocks: DeadlockPayload[];
+  sql: SqlPerformancePayload[];
+  errorMessage: string | null;
+};

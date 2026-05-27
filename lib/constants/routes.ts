@@ -48,8 +48,9 @@ export const PORTAL_NAV_GROUPS: PortalNavGroup[] = [
     label: "시스템 관리",
     items: [
       { label: "DB 인스턴스 관리", href: "/admin/db-instances", mvp: true },
-      { label: "사용자 관리", href: "/admin/users", mvp: true },
-      { label: "역할 및 권한", href: "/admin/roles", mvp: true },
+      { label: "임계치 정책 관리", href: "/admin/threshold-policies", mvp: true },
+      { label: "사용자 관리", href: "/admin/users", mvp: false },
+      { label: "역할 및 권한", href: "/admin/roles", mvp: false },
     ],
   },
 ];

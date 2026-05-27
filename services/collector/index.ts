@@ -1,5 +1,10 @@
 export * from "./types";
+export { createCollectorAdapter, listCollectorAdapterTypes } from "./registry";
 export { createMssqlCollectorAdapter } from "./adapters/mssql";
 export { createOracleCollectorAdapter } from "./adapters/oracle";
 export { createAzureSqlCollectorAdapter } from "./adapters/azure-sql";
-export { listSchedulerStatuses } from "./scheduler";
+export {
+  listSchedulerStatuses,
+  runCollectorForInstance,
+  runCollectorOnce,
+} from "./scheduler";

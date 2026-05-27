@@ -3,14 +3,19 @@
  * 실행: npx tsx scripts/worker/collector.ts (tsx 설치 후) 또는 package.json script 추가
  */
 
-import { listSchedulerStatuses } from "@/services/collector";
+import { listSchedulerStatuses, runCollectorOnce } from "@/services/collector";
 
+/** Collector를 한 번 실행하고 실행 상태 요약을 출력합니다. */
 const main = async () => {
+  const results = await runCollectorOnce();
   const statuses = listSchedulerStatuses();
+
   console.info(
-    "[collector-worker] 시작 — 스케줄 대상:",
+    "[collector-worker] 수집 완료:",
+    results.length,
+    "건 / 스케줄 대상:",
     statuses.length,
-    "건 (T-016에서 구현)",
+    "건",
   );
 };
 

@@ -1,6 +1,6 @@
 # Session Handoff
 
-Last updated: 2026-05-26 KST
+Last updated: 2026-05-27 KST
 
 이 문서는 같은 Cursor 계정으로 여러 PC에서 작업을 이어가기 위한 인수인계 문서입니다. Cursor 채팅이 PC 간 자동 동기화된다고 가정하지 말고, GitHub의 코드 상태와 이 문서를 기준으로 이어갑니다.
 
@@ -34,7 +34,7 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - Framework: Next.js `16.2.6`, React `19.2.4`
 - Styling/UI: Tailwind CSS `4`, Shadcn/ui
 - Lint: ESLint `9` + `eslint-config-next` `16.2.6` (Next/TS 규칙 기반)
-- **T-001~T-008 완료**, **T-011~T-013 완료** (Phase 2 보류, Phase 3 선진행)
+- **T-001~T-008 완료**, **T-011~T-023 완료**, **T-025~T-036 내부 테스트용 MVP 완료** (Phase 2, 메신저, 운영 DB 전환 보류)
 - 폴더 구조: [T-005_folder-structure.md](./T-005_folder-structure.md)
 - 공통 UI 레이아웃: [T-006_common-ui-layout.md](./T-006_common-ui-layout.md)
 - API 응답 규약: [T-007_api-contract.md](./T-007_api-contract.md)
@@ -42,18 +42,27 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - 업무 시스템 마스터: [T-011_business-system-master.md](./T-011_business-system-master.md)
 - DB 인스턴스 관리: [T-012_db-instance-management.md](./T-012_db-instance-management.md)
 - 수집 설정: [T-013_collection-settings.md](./T-013_collection-settings.md)
+- Collector 어댑터: [T-014_collector-adapter-interface.md](./T-014_collector-adapter-interface.md)
+- MSSQL Collector: [T-015_mssql-agentless-collector.md](./T-015_mssql-agentless-collector.md)
+- Collector 실행 엔진: [T-016_collector-scheduler-engine.md](./T-016_collector-scheduler-engine.md)
+- Oracle/Azure SQL 스텁: [T-017_oracle-collector-stub.md](./T-017_oracle-collector-stub.md), [T-018_azure-sql-collector-stub.md](./T-018_azure-sql-collector-stub.md)
+- 운영 DB/시계열/정규화: [T-019_operational-schema-migration.md](./T-019_operational-schema-migration.md), [T-020_metric-history-storage.md](./T-020_metric-history-storage.md), [T-021_session-sql-lock-normalization.md](./T-021_session-sql-lock-normalization.md)
 - Health API: `GET /api/health` — `{ data, error, meta }` + `requestId` 형식
+- Collector API: `POST /api/collector/run`, `GET /api/collector/status`
+- Monitoring API: `GET /api/monitoring/{runs,metrics,sessions,sql}`
+- Alert/Policy API: `GET/POST /api/threshold-policies`, `POST /api/alerts/evaluate`, `GET /api/alerts`
+- Phase 7 화면: `/dashboard`, `/monitoring/*`, `/analysis/top-sql`, `/alerts/*`, `/admin/threshold-policies`
 - 포털 AppShell: `components/layout/*`, `/dashboard`, `/admin/db-instances`
 
 ## 현재 목표
 
-- **다음 작업: T-014** (Collector 어댑터 인터페이스 설계)
+- **다음 작업: T-038** (SQL 상세 분석 고도화) 또는 보류된 운영 DB/SSO/메신저 연동 중 선택
 - Phase 2(T-009~T-010)는 사용자 요청으로 일단 보류
 
 ## Git 상태 (2026-05-26)
 
 - 브랜치: `main`
-- T-011~T-013 구현 후 커밋 전 — `git status`로 변경 파일 확인 필요
+- Phase 6~7 MVP 구현 후 커밋 전 — `git status`로 변경 파일 확인 필요
 
 ## 실행한 명령과 결과
 
@@ -64,11 +73,14 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - T-007 후 `npm run lint`, `npm run build` — 성공
 - T-008 후 `npm run lint`, `npm run build` — 성공
 - T-011~T-013 후 `npm run lint`, `npm run build` — 성공
+- T-014~T-021 후 `npm run lint` — 성공
+- `POST /api/collector/run` (`db_erp_test`) — 성공, 지표 8건/세션 29건/SQL 20건 적재 확인
+- Phase 6~7 MVP 후 `npm run lint`, `npm run build` — 성공
 
 ## 남은 작업과 다음 단계
 
-1. **T-014**: Collector 어댑터 인터페이스와 registry 정리
-2. **T-015**: MSSQL Collector MVP에서 `env:ERP_TEST_DB` 기반 연결 테스트 흐름 재사용
+1. **T-038**: Top SQL 목록에서 SQL 상세 분석 화면으로 확장
+2. 보류 항목 중 선택: Supabase 영구 저장, SSO/RBAC, 메신저 발송 API 연동
 3. Phase 2 재개 시 T-009/T-010 인증·RBAC 연결
 
 ## 주의할 점
@@ -76,9 +88,9 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - `services/`는 React·클라이언트에서 import 금지
 - 실제 `.env.local` 값은 문서/로그/커밋에 남기지 않음
 - DB·SSO 미연동 — Health API의 `db`는 환경 변수 설정 상태만 표시
-- T-011~T-013 API/UI는 개발용 메모리 저장소 기반이며 운영 DB 저장은 T-019에서 확정
+- T-011~T-021 API/수집 결과 저장은 개발용 메모리 저장소 기반이며 Supabase 마이그레이션 초안만 작성됨
 - T-010 보류로 DB 관리 API의 역할별 권한 검증은 아직 미적용
-- Oracle/Azure Collector는 스텁(throw)
+- Oracle/Azure Collector는 공통 인터페이스 스텁이며 실제 연결은 미구현
 
 ## 유용한 명령
 

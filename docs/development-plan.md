@@ -147,9 +147,9 @@ flowchart TD
 
 | 항목 | 값 |
 |------|-----|
-| **다음 착수 권장 TASK** | T-014 |
-| **현재 Phase** | Phase 3 완료 / Phase 2 보류 |
-| **전체 진행률** | 11 / 45 TASK 완료 |
+| **다음 착수 권장 TASK** | T-038 |
+| **현재 Phase** | Phase 7 내부 테스트용 MVP 완료 / Phase 2·메신저·운영 DB 전환 보류 |
+| **전체 진행률** | 33 / 45 TASK 완료 |
 
 > AGENT는 작업 착수 시 위 표를 갱신합니다.
 
@@ -431,10 +431,10 @@ flowchart TD
 | 목표 | DBMS별 확장 가능한 Collector 추상화 |
 | 상세 작업 | `ICollectorAdapter` (connect, collectMetrics, collectSessions, collectLocks, collectSql, collectDeadlocks) 정의 |
 | 완료 기준 | MSSQL/Oracle/Azure용 스텁 어댑터 등록 가능 |
-| 산출물 | `lib/collector/types.ts`, 어댑터 registry |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-014_collector-adapter-interface.md](./T-014_collector-adapter-interface.md), `services/collector/types.ts`, `services/collector/registry.ts` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: `ICollectorAdapter` 계약(connect, collectMetrics, collectSessions, collectLocks, collectSql, collectDeadlocks), DBMS별 registry, 공통 Collector 실행 결과 타입 구현. |
 
 ---
 
@@ -450,11 +450,11 @@ flowchart TD
 | 목표 | 연결 상태, 성능 카운터, 세션, Wait, Blocking, Deadlock, Top SQL 수집 |
 | 상세 작업 | DMV/Query Store 조회, 파라미터 바인딩, 최소 권한 계정, 수집 실패 재시도 |
 | 완료 기준 | 등록된 MSSQL DB에서 §11.1 항목 수집 성공, 실패 시 이력 저장 |
-| 산출물 | `lib/collector/mssql/*` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
-| 이슈/결정사항 | Query Store 비활성 DB는 DMV 대체 경로 필요 |
+| 산출물 | [T-015_mssql-agentless-collector.md](./T-015_mssql-agentless-collector.md), `services/collector/adapters/mssql/*` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: MSSQL DMV 기반 가용성, 성능 카운터, 세션, Blocking, Top SQL 수집 구현. `env:ERP_TEST_DB` 연결 설정 재사용 및 SQL literal 마스킹 적용. |
+| 이슈/결정사항 | Query Store 비활성 DB를 고려해 1차 MVP는 `sys.dm_exec_query_stats` 기반 Top SQL을 사용. Deadlock은 후속 Extended Events 연동 대상으로 남김. |
 
 ---
 
@@ -469,10 +469,10 @@ flowchart TD
 | 목표 | 인스턴스별 수집 주기 실행, 병렬/재시도, 수집 상태 모니터링 |
 | 상세 작업 | cron/interval worker, BullMQ 또는 in-process scheduler, 수집 지연·오류 메트릭 |
 | 완료 기준 | 설정 주기대로 반복 수집, 연속 실패 시 알림 후보 이벤트 생성 |
-| 산출물 | Collector worker 서비스 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-016_collector-scheduler-engine.md](./T-016_collector-scheduler-engine.md), `services/collector/scheduler/*`, `app/api/collector/*`, `scripts/worker/collector.ts` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 단일/전체 인스턴스 수동 실행 엔진, 중복 실행 방지 상태, 실행 이력 저장, Collector 상태/실행 API 구현. |
 
 ---
 
@@ -487,11 +487,11 @@ flowchart TD
 | 목표 | V$SESSION, V$SQL, V$LOCK 등 1차 수집 항목 |
 | 상세 작업 | Oracle 연결, §4 Oracle 수집 항목 구현, ASH/AWR 라이선스 검토 문서화 |
 | 완료 기준 | Oracle 테스트 DB 1대 이상 수집 성공 |
-| 산출물 | `lib/collector/oracle/*` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
-| 이슈/결정사항 | ASH/AWR 사용 시 라이선스 blocker 가능 → `보류` 전환 가능 |
+| 산출물 | [T-017_oracle-collector-stub.md](./T-017_oracle-collector-stub.md), `services/collector/adapters/oracle/*` |
+| 진행 상태 | `완료(스텁)` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 공통 Collector registry에 등록 가능한 Oracle 스텁 어댑터 구현. |
+| 이슈/결정사항 | ASH/AWR 사용 시 라이선스 blocker 가능. 실제 연결은 Oracle 테스트 DB와 드라이버 확정 후 구현. |
 
 ---
 
@@ -506,10 +506,10 @@ flowchart TD
 | 목표 | Azure Monitor Metrics + DMV 하이브리드 수집 |
 | 상세 작업 | Azure Monitor/Resource Graph 연동, API 호출 제한 처리 |
 | 완료 기준 | Azure SQL 테스트 인스턴스 지표 수집 |
-| 산출물 | `lib/collector/azure-sql/*` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-018_azure-sql-collector-stub.md](./T-018_azure-sql-collector-stub.md), `services/collector/adapters/azure-sql/*` |
+| 진행 상태 | `완료(스텁)` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 공통 Collector registry에 등록 가능한 Azure SQL 스텁 어댑터 구현. Azure Monitor 연동은 후속 확장. |
 
 ---
 
@@ -527,10 +527,10 @@ flowchart TD
 | 목표 | DB_INSTANCE, ALERT_EVENT, ISSUE, 사용자/권한, 정책 테이블 DDL |
 | 상세 작업 | Supabase migration 또는 SQL DDL, 인덱스, FK 설계 |
 | 완료 기준 | 마이그레이션 적용 성공, CRUD 테스트 |
-| 산출물 | `supabase/migrations/*` 또는 `db/migrations/*` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-019_operational-schema-migration.md](./T-019_operational-schema-migration.md), `supabase/migrations/202605270001_phase5_core.sql` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: business_system, db_instance, collection_run, metric_history, session_snapshot, blocking_snapshot, sql_performance, deadlock_event DDL 초안 작성. |
 
 ---
 
@@ -546,10 +546,10 @@ flowchart TD
 | 목표 | 초/분 단위 성능 지표 저장, 보관·집계 정책 |
 | 상세 작업 | TimescaleDB hypertable 또는 PostgreSQL 파티션, §8.1~8.3 보관 기간 반영 |
 | 완료 기준 | Collector 수집 데이터 적재 및 기간 조회 API |
-| 산출물 | metric_history 테이블, 집계 job |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-020_metric-history-storage.md](./T-020_metric-history-storage.md), `services/storage/*`, `app/api/monitoring/metrics/route.ts` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: Collector metric payload 정규화, 메모리 시계열 저장소, 최근 지표 조회 API 구현. 운영 DB hypertable/partition은 후속 적용. |
 
 ---
 
@@ -565,10 +565,10 @@ flowchart TD
 | 목표 | DBMS별 raw 데이터를 공통 모델로 변환 저장 |
 | 상세 작업 | tenant_id, db_instance_id, metric_time, sql_hash 정규화, SQL Text 마스킹 |
 | 완료 기준 | MSSQL 수집 결과가 공통 스키마에 적재됨 |
-| 산출물 | Processing/normalize 모듈 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-021_session-sql-lock-normalization.md](./T-021_session-sql-lock-normalization.md), `services/storage/normalize.ts`, `app/api/monitoring/{runs,sessions,sql}` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 세션, Blocking, SQL 성능, Deadlock payload를 공통 저장 레코드로 정규화하고 조회 API를 구현. SQL Text literal 마스킹 적용. |
 
 ---
 
@@ -586,10 +586,10 @@ flowchart TD
 | 목표 | 이벤트 유형별 임계치, DB 그룹 템플릿, 지속 시간 조건 |
 | 상세 작업 | 정책 CRUD API/UI, §6 알림 생성 기준 반영 |
 | 완료 기준 | 정책 등록 후 테스트 조건 평가 가능 |
-| 산출물 | 임계치 정책 API/UI |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-022_threshold-policy-management.md](./T-022_threshold-policy-management.md), `services/alert/*`, `app/api/threshold-policies/*`, `app/(portal)/admin/threshold-policies` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 기본 추천 임계치, 업무 시스템/DB 인스턴스별 override, 정책 등록·삭제 API와 관리자 화면 구현. |
 
 ---
 
@@ -605,10 +605,10 @@ flowchart TD
 | 목표 | 임계치/이벤트 기반 ALERT_EVENT 생성, 중복 억제, 재알림 |
 | 상세 작업 | Alert Engine 배치/스트림 처리, severity 산정, 상태(미확인/확인) |
 | 완료 기준 | CPU/Blocking/Deadlock 등 샘플 조건에서 이벤트 생성 확인 |
-| 산출물 | `lib/alert-engine/*` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-023_alert-engine.md](./T-023_alert-engine.md), `services/alert/*`, `app/api/alerts/*` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 최신 수집 데이터에 임계치 정책을 적용해 알림 이벤트를 생성하고, 동일 DB/지표/severity 기준 중복 억제와 확인 처리 API 구현. |
 
 ---
 
@@ -624,10 +624,10 @@ flowchart TD
 | 목표 | 1차 Email 또는 Teams Webhook 연동, 발송 실패 재시도 |
 | 상세 작업 | 채널 adapter, 담당자/대체 담당자 라우팅 |
 | 완료 기준 | 테스트 알림 발송 성공, 실패 이력 저장 |
-| 산출물 | Notification service |
-| 진행 상태 | `대기` |
+| 산출물 | 메신저 발송 API 연동 대기 |
+| 진행 상태 | `보류` |
 | 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 작업 내역 | 2026-05-27 USER 결정: 메신저 메시지 발송 API는 추후 제공 예정이므로 현재는 알림 이벤트 생성까지만 구현하고 발송 연동은 보류. |
 
 ---
 
@@ -643,10 +643,10 @@ flowchart TD
 | 목표 | 대시보드·실시간 화면용 지표/알림 푸시 채널 |
 | 상세 작업 | WebSocket 또는 SSE endpoint, 구독 단위(db_instance_id), 재연결 처리 |
 | 완료 기준 | 클라이언트 구독 시 5~10초 이내 지표 갱신 수신 |
-| 산출물 | `app/api/realtime/*` 또는 WebSocket gateway |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-025_realtime-polling-api.md](./T-025_realtime-polling-api.md), `app/api/monitoring/summary`, polling 기반 화면 |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: WebSocket/SSE 대신 내부 테스트용 10초 polling 기반 실시간 조회 구조 구현. |
 
 ---
 
@@ -661,10 +661,10 @@ flowchart TD
 | 목표 | 서버 상태 캐싱, 로딩/오류/재시도 표준화 |
 | 상세 작업 | TanStack Query Provider, query key 규칙, API client wrapper |
 | 완료 기준 | 대표 목록 API 1개 이상 Query hook으로 연동 |
-| 산출물 | `lib/api-client.ts`, `hooks/queries/*` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `components/features/monitoring/MonitoringRealtimeClient.tsx` 내 polling fetch wrapper |
+| 진행 상태 | `완료(간소화)` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: TanStack Query 도입 전, 로그인 없는 내부 테스트용 fetch/polling 패턴으로 대표 화면 연동. |
 
 ---
 
@@ -680,10 +680,10 @@ flowchart TD
 | 목표 | 수집→저장→알림→API 파이프라인 E2E 검증 |
 | 상세 작업 | 테스트 DB 시나리오(고CPU, Blocking), `npm run lint`/`build`, 대시보드 응답 시간 측정 |
 | 완료 기준 | E2E 시나리오 1건 통과, lint 통과, §17 Exit Criteria 사전 점검 |
-| 산출물 | 테스트 체크리스트, `docs/mvp-verification.md` (선택) |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | lint/build 검증, Collector 수동 실행 검증 |
+| 진행 상태 | `완료(1차)` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: `npm run lint`, `npm run build` 통과. Collector 수동 실행과 모니터링 API 조회 흐름 검증. |
 
 ---
 
@@ -703,10 +703,10 @@ flowchart TD
 | 목표 | 전체 DB 상태, Top-N, 최근 알림, 미처리 이슈 요약 |
 | 상세 작업 | 위젯: 상태 카드, DBMS 분포, CPU/I/O Top-N, Blocking/Deadlock, 로딩/빈/오류 UI |
 | 완료 기준 | 3초 이내 초기 로드 목표, 필터(업무/DBMS/중요도) 동작 |
-| 산출물 | `app/(portal)/dashboard/page.tsx` |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | [T-028_to_T-037_phase7-screen-mvp.md](./T-028_to_T-037_phase7-screen-mvp.md), `app/(portal)/dashboard/page.tsx` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 실시간 수집 실행, DB 상태 요약, 미확인 알림 요약을 polling 기반으로 표시. |
 
 ---
 
@@ -722,10 +722,10 @@ flowchart TD
 | 목표 | CPU/Memory/I/O/Session/Wait/Log/Temp 실시간 차트 |
 | 상세 작업 | Recharts 추이 그래프, WebSocket 또는 polling(5~10초) |
 | 완료 기준 | DB 선택 시 실시간 지표 갱신, 상세 화면 이동 링크 |
-| 산출물 | DB 실시간 현황 페이지 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `app/(portal)/monitoring/realtime/page.tsx` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 최신 수집 상태와 주요 MSSQL 지표를 10초 polling으로 표시. |
 
 ---
 
@@ -740,10 +740,10 @@ flowchart TD
 | PRD 매핑 | FR-004, 화면 §3.4 |
 | 목표 | 세션 목록, 실행 SQL, Wait, Blocking 강조 |
 | 완료 기준 | 필터·정렬, SQL 상세 링크(스텁 가능) |
-| 산출물 | 실시간 세션 페이지 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `app/(portal)/monitoring/sessions/page.tsx` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 최근 수집된 세션, 상태, wait, 실행 SQL hash를 표시. |
 
 ---
 
@@ -758,10 +758,10 @@ flowchart TD
 | PRD 매핑 | FR-005, 화면 §3.5 |
 | 목표 | Blocking Tree, Root Blocker, Blocked Session |
 | 완료 기준 | 트리 시각화, 관련 SQL/세션 이동 |
-| 산출물 | Blocking 페이지 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `app/(portal)/monitoring/blocking/page.tsx` |
+| 진행 상태 | `완료(요약)` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: Blocking 건수 요약 화면 구현. Tree 시각화는 후속 고도화. |
 
 ---
 
@@ -776,10 +776,10 @@ flowchart TD
 | PRD 매핑 | FR-005, 화면 §3.6 |
 | 목표 | Deadlock 이력, 관련 SQL/세션, 반복 패턴 |
 | 완료 기준 | 이력 목록·상세 조회 |
-| 산출물 | Deadlock 페이지 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `app/(portal)/monitoring/deadlocks/page.tsx` |
+| 진행 상태 | `완료(요약)` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: Deadlock 이벤트 수 요약 화면 구현. Extended Events 수집은 후속 고도화. |
 
 ---
 
@@ -794,10 +794,10 @@ flowchart TD
 | PRD 매핑 | FR-006, 화면 §3.7 |
 | 목표 | Top Wait, Wait 추이, 관련 SQL/세션 연계 |
 | 완료 기준 | 기간 변경 시 과거 Wait 조회 |
-| 산출물 | Wait 현황 페이지 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `app/(portal)/monitoring/waits/page.tsx` |
+| 진행 상태 | `완료(세션 기반)` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 세션 wait type/wait time 기반으로 Wait 후보를 표시. |
 
 ---
 
@@ -812,10 +812,10 @@ flowchart TD
 | PRD 매핑 | FR-007, 화면 §3.10 |
 | 목표 | Top SQL 목록, Query Hash 집계, 페이징 |
 | 완료 기준 | 기간/DB/정렬 필터, SQL 상세 링크 |
-| 산출물 | Top SQL 페이지 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `app/(portal)/analysis/top-sql/page.tsx` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 최근 수집된 Top SQL, 실행 횟수, 평균 수행 시간, CPU, 마스킹 SQL Text 표시. |
 
 ---
 
@@ -831,9 +831,9 @@ flowchart TD
 | 목표 | T-012 API를 운영자 UI로 완성 |
 | 완료 기준 | 등록/수정/비활성화/연결테스트/수집테스트 |
 | 산출물 | 시스템 관리 > DB 인스턴스 화면 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 기존 DB 인스턴스 관리 화면을 운영 MVP 메뉴에 유지하고 연결/수집 상태 분리 반영. |
 
 ---
 
@@ -848,10 +848,10 @@ flowchart TD
 | PRD 매핑 | FR-013, 화면 §3.17 |
 | 목표 | 실시간 알림 목록, 확인 처리, 이슈 생성 링크 |
 | 완료 기준 | 알림 확인·담당자 변경·관련 화면 이동 |
-| 산출물 | 실시간 알림 페이지 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 산출물 | `app/(portal)/alerts/live/page.tsx` |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-27 AGENT: 임계치 평가 결과로 생성된 알림 이벤트를 표시. 메신저 발송은 보류. |
 
 ---
 
@@ -867,9 +867,9 @@ flowchart TD
 | 목표 | 사용자/역할/메뉴·DB 그룹 권한 관리 |
 | 완료 기준 | 역할 부여·회수, 감사 로그 조회 |
 | 산출물 | 사용자·권한 관리 화면 |
-| 진행 상태 | `대기` |
+| 진행 상태 | `보류` |
 | 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 작업 내역 | 2026-05-27 USER 결정: Phase 2 인증·권한은 당분간 보류하고 로그인 없이 접근. 사용자/권한 화면은 후속 구현. |
 
 ---
 

@@ -1,0 +1,29 @@
+/** Collector 수동 실행 API입니다. */
+
+import { withApiHandler } from "@/lib/api";
+import { runCollectorForInstance, runCollectorOnce } from "@/services/collector";
+import { readJsonObject } from "@/lib/validation";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * 전체 또는 단일 DB 인스턴스 Collector를 즉시 실행합니다.
+ */
+export const POST = withApiHandler(async ({ request }) => {
+  const payload = await readJsonObject(request);
+  const dbInstanceId =
+    typeof payload.dbInstanceId === "string" && payload.dbInstanceId.trim()
+      ? payload.dbInstanceId.trim()
+      : null;
+
+  const results = dbInstanceId
+    ? [await runCollectorForInstance(dbInstanceId)]
+    : await runCollectorOnce();
+
+  return {
+    data: {
+      items: results,
+    },
+  };
+});

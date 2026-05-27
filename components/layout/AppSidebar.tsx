@@ -123,7 +123,7 @@ export const AppSidebar = () => {
         <div className="rounded-lg border bg-background p-3 text-xs group-data-[collapsible=icon]:hidden">
           <p className="font-medium">MVP 구축 단계</p>
           <p className="text-muted-foreground mt-1">
-            Phase 1 기반 설계 진행 중
+            실시간 MSSQL 모니터링 구축 중
           </p>
         </div>
       </SidebarFooter>
