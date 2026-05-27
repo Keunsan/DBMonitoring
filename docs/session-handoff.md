@@ -1,6 +1,6 @@
 # Session Handoff
 
-Last updated: 2026-05-27 KST
+Last updated: 2026-05-28 KST
 
 이 문서는 같은 Cursor 계정으로 여러 PC에서 작업을 이어가기 위한 인수인계 문서입니다. Cursor 채팅이 PC 간 자동 동기화된다고 가정하지 말고, GitHub의 코드 상태와 이 문서를 기준으로 이어갑니다.
 
@@ -34,7 +34,10 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - Framework: Next.js `16.2.6`, React `19.2.4`
 - Styling/UI: Tailwind CSS `4`, Shadcn/ui
 - Lint: ESLint `9` + `eslint-config-next` `16.2.6` (Next/TS 규칙 기반)
-- **T-001~T-008 완료**, **T-011~T-023 완료**, **T-025~T-036 내부 테스트용 MVP 완료** (Phase 2, 메신저, 운영 DB 전환 보류)
+- **T-001~T-008 완료**, **T-011~T-023 완료**, **T-025~T-036 내부 테스트용 MVP 완료**
+- MSSQL 수집기는 QPS/TPS, 세션 집계, DB 파일/파일그룹, 테이블 크기 지표까지 확장됨
+- Azure SQL 수집기는 더 이상 단순 스텁이 아니며 MSSQL 호환 DMV + `sys.dm_db_resource_stats` 기반 주요 리소스 지표를 수집함
+- Phase 2 인증/RBAC, Supabase 영구 저장 전환, 메신저 실제 발송 연동은 보류
 - 폴더 구조: [T-005_folder-structure.md](./T-005_folder-structure.md)
 - 공통 UI 레이아웃: [T-006_common-ui-layout.md](./T-006_common-ui-layout.md)
 - API 응답 규약: [T-007_api-contract.md](./T-007_api-contract.md)
@@ -45,7 +48,7 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - Collector 어댑터: [T-014_collector-adapter-interface.md](./T-014_collector-adapter-interface.md)
 - MSSQL Collector: [T-015_mssql-agentless-collector.md](./T-015_mssql-agentless-collector.md)
 - Collector 실행 엔진: [T-016_collector-scheduler-engine.md](./T-016_collector-scheduler-engine.md)
-- Oracle/Azure SQL 스텁: [T-017_oracle-collector-stub.md](./T-017_oracle-collector-stub.md), [T-018_azure-sql-collector-stub.md](./T-018_azure-sql-collector-stub.md)
+- Oracle 스텁/Azure SQL 수집기: [T-017_oracle-collector-stub.md](./T-017_oracle-collector-stub.md), [T-018_azure-sql-collector-stub.md](./T-018_azure-sql-collector-stub.md)
 - 운영 DB/시계열/정규화: [T-019_operational-schema-migration.md](./T-019_operational-schema-migration.md), [T-020_metric-history-storage.md](./T-020_metric-history-storage.md), [T-021_session-sql-lock-normalization.md](./T-021_session-sql-lock-normalization.md)
 - Health API: `GET /api/health` — `{ data, error, meta }` + `requestId` 형식
 - Collector API: `POST /api/collector/run`, `GET /api/collector/status`
@@ -54,15 +57,66 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - Phase 7 화면: `/dashboard`, `/monitoring/*`, `/analysis/top-sql`, `/alerts/*`, `/admin/threshold-policies`
 - 포털 AppShell: `components/layout/*`, `/dashboard`, `/admin/db-instances`
 
+## 최근 완료한 주요 작업
+
+### MSSQL 모니터링 확장
+
+- `services/collector/adapters/mssql/index.ts`
+  - `Batch Requests/sec`, `Transactions/sec`, `Log Flushes/sec`는 누적 카운터 원값이 아니라 1초 샘플링 delta로 계산
+  - 세션 총계/활성/슬리핑/차단 세션 집계 추가
+  - 데이터 파일, 파일그룹 사용률, 테이블별 크기/row count 수집 추가
+  - SQL 메모리 프로세스 지표는 유효한 숫자일 때만 `server.memory.used_percent`로 저장
+- `lib/monitoring/metric-keys.ts`, `lib/monitoring/resource-summary.ts`, `lib/monitoring/metric-details.ts`
+  - 신규 지표 키와 요약/상세 추출 로직 추가
+- `components/features/monitoring/ThroughputSessionCards.tsx`, `DbStoragePanels.tsx`, `MonitoringRealtimeClient.tsx`
+  - TPS/QPS/로그 flush, 세션, 파일/파일그룹/테이블 사용량 표시 추가
+
+### Azure SQL 수집기 확장
+
+- `services/collector/adapters/azure-sql/index.ts`
+  - 기존 스텁 대신 MSSQL 호환 어댑터를 재사용해 세션/락/SQL/일부 DMV 지표 수집
+  - `sys.dm_db_resource_stats`에서 CPU, 메모리, Data IO, Log Write, 스토리지 사용량 수집
+  - Azure SQL에서는 `dm_db_resource_stats`의 CPU/메모리/IO/스토리지 값을 우선하도록 병합 로직 수정
+  - `server.memory.used_percent`가 MSSQL 호환 경로에서 빈 값으로 먼저 들어와 Azure 메모리 사용률을 막던 문제 수정
+- `lib/monitoring/metric-keys.ts`
+  - `server.azure.data_io.used_percent`, `server.azure.log_write.used_percent` 추가
+- 관련 문서 갱신
+  - [T-018_azure-sql-collector-stub.md](./T-018_azure-sql-collector-stub.md)
+  - [development-plan.md](./development-plan.md)
+  - [T-003_architecture.md](./T-003_architecture.md)
+  - [T-014_collector-adapter-interface.md](./T-014_collector-adapter-interface.md)
+  - [T-012_db-instance-management.md](./T-012_db-instance-management.md)
+
+### 화면/레이아웃 개선
+
+- `components/layout/AppShell.tsx`
+  - 포털 전체 높이를 viewport 안에 고정하고 내부 콘텐츠가 스크롤되도록 조정
+- `components/features/monitoring/MonitoringRealtimeClient.tsx`
+  - 실시간/세션/SQL 목록이 페이지 전체를 밀지 않고 컴포넌트 내부에서 스크롤되도록 변경
+- `components/features/admin/DbInstanceManagementClient.tsx`
+  - DB 인스턴스 관리 하단 업무 시스템/DB 인스턴스 목록이 보이도록 내부 스크롤 적용
+- `components/layout/PageHeader.tsx`, `components/ui/card.tsx`, `components/ui/table.tsx`
+  - 포털 전반의 여백과 카드/테이블 밀도를 줄임
+
+### 알림/대시보드 확인
+
+- 대시보드의 `미확인 알림`은 `/api/alerts` 응답 중 `status === "NEW"`인 알림 개수임
+- 알림은 임계치 정책 평가(`POST /api/alerts/evaluate`)로 생성되며 현재는 개발용 인메모리 저장소 기반
+
 ## 현재 목표
 
-- **다음 작업: T-038** (SQL 상세 분석 고도화) 또는 보류된 운영 DB/SSO/메신저 연동 중 선택
-- Phase 2(T-009~T-010)는 사용자 요청으로 일단 보류
+- Azure SQL 메모리 사용률 수정 후 실제 Azure SQL 인스턴스에서 수집 API를 다시 실행해 화면 반영 확인
+- 그 다음 작업 후보:
+  - **T-038**: Top SQL 목록에서 SQL 상세 분석 화면으로 확장
+  - Supabase 영구 저장 전환
+  - SSO/RBAC 연결
+  - 메신저 발송 API 연동
 
-## Git 상태 (2026-05-26)
+## Git 상태 (2026-05-28)
 
 - 브랜치: `main`
-- Phase 6~7 MVP 구현 후 커밋 전 — `git status`로 변경 파일 확인 필요
+- 이 문서 수정 직전 `git status --short` 출력 없음
+- `.next/` 빌드 산출물이 보이면 커밋 대상에서 제외하고, 필요 시 `.gitignore` 상태를 먼저 확인
 
 ## 실행한 명령과 결과
 
@@ -76,12 +130,18 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - T-014~T-021 후 `npm run lint` — 성공
 - `POST /api/collector/run` (`db_erp_test`) — 성공, 지표 8건/세션 29건/SQL 20건 적재 확인
 - Phase 6~7 MVP 후 `npm run lint`, `npm run build` — 성공
+- MSSQL 추가 지표 및 Azure SQL 수집기 확장 후 `npm run lint` — 성공
+- MSSQL 추가 지표 및 Azure SQL 수집기 확장 후 `npm run build` — 성공
+- Azure SQL 메모리 병합 로직 수정 후 `npm run lint` — 성공
 
 ## 남은 작업과 다음 단계
 
-1. **T-038**: Top SQL 목록에서 SQL 상세 분석 화면으로 확장
-2. 보류 항목 중 선택: Supabase 영구 저장, SSO/RBAC, 메신저 발송 API 연동
-3. Phase 2 재개 시 T-009/T-010 인증·RBAC 연결
+1. Azure SQL 인스턴스에서 `POST /api/collector/run` 실행 후 `server.memory.used_percent`가 적재되는지 확인
+2. Azure SQL DB가 막 생성되었거나 부하가 없으면 `sys.dm_db_resource_stats`가 비어 있을 수 있으므로 몇 분 뒤 재시도
+3. 필요 시 Azure SQL 계정에 `VIEW DATABASE STATE` 권한이 있는지 확인
+4. **T-038**: Top SQL 목록에서 SQL 상세 분석 화면으로 확장
+5. 보류 항목 중 선택: Supabase 영구 저장, SSO/RBAC, 메신저 발송 API 연동
+6. Phase 2 재개 시 T-009/T-010 인증·RBAC 연결
 
 ## 주의할 점
 
@@ -90,7 +150,9 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 - DB·SSO 미연동 — Health API의 `db`는 환경 변수 설정 상태만 표시
 - T-011~T-021 API/수집 결과 저장은 개발용 메모리 저장소 기반이며 Supabase 마이그레이션 초안만 작성됨
 - T-010 보류로 DB 관리 API의 역할별 권한 검증은 아직 미적용
-- Oracle/Azure Collector는 공통 인터페이스 스텁이며 실제 연결은 미구현
+- Oracle Collector는 공통 인터페이스 스텁이며 실제 연결은 미구현
+- Azure SQL은 SQL 연결 기반 수집만 구현됨. Azure Monitor API, Resource Graph, AAD 인증은 아직 범위 밖
+- Azure SQL 메모리는 `sys.dm_db_resource_stats.avg_memory_usage_percent`를 우선 사용함. 화면에서 `미수집`이면 수집 결과에 해당 metric이 없는지 먼저 확인
 
 ## 유용한 명령
 
