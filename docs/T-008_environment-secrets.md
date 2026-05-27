@@ -50,7 +50,7 @@ Last updated: 2026-05-26 KST
 | 키 | 필수 환경 | Secret | 설명 |
 |----|-----------|--------|------|
 | `NEXT_PUBLIC_SUPABASE_URL` | staging, production | 아니오 | Supabase 프로젝트 URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | staging, production | 예 | 브라우저용 anon key |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | staging, production | 예 | 브라우저용 Supabase publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | staging, production | 예 | 서버 전용 service role key |
 | `DATABASE_URL` | production | 예 | 서버 전용 PostgreSQL 연결 문자열 |
 
@@ -138,7 +138,7 @@ if (!result.ok) {
 현재 기준:
 
 - `development`: 필수 없음, 필요한 기능별로 개별 검증
-- `staging`: Supabase URL/anon key/service role, `AUTH_SESSION_SECRET`
+- `staging`: Supabase URL/publishable key/service role, `AUTH_SESSION_SECRET`
 - `production`: staging 필수 + `DATABASE_URL`
 
 ---

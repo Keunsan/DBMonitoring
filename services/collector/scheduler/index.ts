@@ -70,8 +70,12 @@ const toCollectorContext = (instance: ReturnType<typeof listDbInstances>[number]
   dbInstanceId: instance.id,
   dbmsType: instance.dbmsType,
   connectionSecretRef: instance.connectionSecretRef,
-  databaseName: instance.databaseName,
   instanceName: instance.instanceName,
+  host: instance.host,
+  port: instance.port,
+  serviceName: instance.serviceName,
+  databaseName: instance.databaseName,
+  envType: instance.envType,
 });
 
 const createFailedResult = (

@@ -1,10 +1,12 @@
 /** Phase 3 DB 인스턴스 관리용 개발 메모리 저장소입니다. */
 
 import { ApiRouteError, badRequest, notFound } from "@/lib/api";
-import {
-  getErpConnectionFailureMessage,
-  testErpTestDbConnection,
-} from "@/lib/db/erp-test";
+import { parseConnectionSecretRef } from "@/lib/secrets/refs";
+import { toConnectionTestApiError } from "@/lib/secrets/errors";
+import { maskHost, formatSecretRefForLog } from "@/lib/security/mask";
+import { createCollectorAdapter } from "@/services/collector/registry";
+
+import type { CollectorContext } from "@/services/collector/types";
 import {
   DEFAULT_TENANT_ID,
   type CollectStatus,
@@ -271,7 +273,11 @@ export const parseDbInstanceInput = (
     collectIntervalSec,
     sqlAggregateIntervalSec,
     isActive: parseBoolean(payload, "isActive", true),
-    connectionSecretRef: requireString(payload, "connectionSecretRef"),
+    connectionSecretRef: (() => {
+      const ref = requireString(payload, "connectionSecretRef");
+      parseConnectionSecretRef(ref);
+      return ref;
+    })(),
   };
 };
 
@@ -403,6 +409,16 @@ export const createDbInstance = (input: DbInstanceInput) => {
   return instance;
 };
 
+/**
+ * DB 인스턴스의 connection_secret_ref만 갱신합니다.
+ */
+export const updateDbInstanceSecretRef = (id: string, connectionSecretRef: string) => {
+  const instance = getDbInstance(id);
+  instance.connectionSecretRef = connectionSecretRef;
+  instance.updatedAt = now();
+  return instance;
+};
+
 export const updateDbInstance = (id: string, input: DbInstanceInput) => {
   const state = getState();
   const index = state.dbInstances.findIndex((instance) => instance.id === id);
@@ -480,45 +496,46 @@ const updateConnectionTestStatus = (id: string, status: CollectStatus) => {
   return instance;
 };
 
+const toCollectorContext = (instance: DbInstance): CollectorContext => ({
+  dbInstanceId: instance.id,
+  dbmsType: instance.dbmsType,
+  connectionSecretRef: instance.connectionSecretRef,
+  instanceName: instance.instanceName,
+  host: instance.host,
+  port: instance.port,
+  serviceName: instance.serviceName,
+  databaseName: instance.databaseName,
+  envType: instance.envType,
+});
+
 export const testDbInstanceConnection = async (id: string) => {
   const instance = getDbInstance(id);
-
-  if (instance.dbmsType !== "MSSQL") {
-    updateConnectionTestStatus(id, "FAIL");
-    throw new ApiRouteError({
-      code: "DB_CONNECTION_TEST_UNSUPPORTED",
-      message: "현재 연결 테스트는 MSSQL 인스턴스만 지원합니다.",
-      status: 400,
-    });
-  }
-
-  if (instance.connectionSecretRef !== "env:ERP_TEST_DB") {
-    updateConnectionTestStatus(id, "FAIL");
-    throw new ApiRouteError({
-      code: "DB_CONNECTION_SECRET_UNSUPPORTED",
-      message:
-        "개발 단계에서는 env:ERP_TEST_DB secret ref를 사용하는 MSSQL 연결만 테스트할 수 있습니다.",
-      status: 400,
-    });
-  }
+  const context = toCollectorContext(instance);
 
   try {
-    const result = await testErpTestDbConnection();
+    const adapter = createCollectorAdapter(context);
+    const result = await adapter.connect();
+
+    if (!result.success) {
+      updateConnectionTestStatus(id, "FAIL");
+      throw toConnectionTestApiError(new Error(result.message));
+    }
+
     updateConnectionTestStatus(id, "OK");
 
     return {
       status: "connected",
-      target: result.target,
-      info: result.info,
+      dbmsType: instance.dbmsType,
+      host: maskHost(instance.host),
+      port: instance.port,
+      databaseName: instance.databaseName,
+      secretRef: formatSecretRefForLog(instance.connectionSecretRef),
+      latencyMs: result.latencyMs ?? null,
+      message: result.message,
       checkedAt: now(),
     };
   } catch (error) {
     updateConnectionTestStatus(id, "FAIL");
-    throw new ApiRouteError({
-      code: "DB_CONNECTION_TEST_FAILED",
-      message: getErpConnectionFailureMessage(error),
-      status: 502,
-      cause: error,
-    });
+    throw toConnectionTestApiError(error);
   }
 };

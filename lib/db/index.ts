@@ -2,6 +2,11 @@
 
 import { getOptionalEnv, validateRequiredEnv } from "@/lib/env";
 
+export { getSupabaseServerClient, isSupabaseServerConfigured } from "./supabase-server";
+export { buildMssqlPoolConfig, buildOracleConnectString } from "./connection-config";
+export { withMssqlConnection } from "./mssql-connection";
+export { withOracleConnection } from "./oracle-connection";
+
 export type DbClientStatus = "not_configured" | "ready" | "error";
 
 /**
@@ -10,7 +15,7 @@ export type DbClientStatus = "not_configured" | "ready" | "error";
 export const getDbClientStatus = (): DbClientStatus => {
   const hasSupabaseConfig =
     !!getOptionalEnv("NEXT_PUBLIC_SUPABASE_URL") &&
-    !!getOptionalEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    !!getOptionalEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   const hasDatabaseUrl = !!getOptionalEnv("DATABASE_URL");
 
   if (!hasSupabaseConfig && !hasDatabaseUrl) {

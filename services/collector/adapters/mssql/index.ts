@@ -2,8 +2,9 @@
 
 import sql from "mssql";
 
+import { withMssqlConnection } from "@/lib/db/mssql-connection";
 import { SERVER_METRIC_KEYS } from "@/lib/monitoring/metric-keys";
-import { getErpConnectionFailureMessage, getErpTestDbConfig } from "@/lib/db/erp-test";
+import { getDbConnectionFailureMessage } from "@/lib/secrets/errors";
 import type {
   AvailabilityPayload,
   BlockingPayload,
@@ -78,44 +79,15 @@ const toIsoString = (value: Date | string | null) => {
   return value;
 };
 
-const createPool = () => {
-  const result = getErpTestDbConfig();
-
-  if (!result.configured) {
-    throw new Error(`Missing ERP test DB environment: ${result.missingKeys.join(", ")}`);
-  }
-
-  return new sql.ConnectionPool(result.config);
-};
-
-const withConnection = async <T>(
-  work: (connection: sql.ConnectionPool) => Promise<T>,
-) => {
-  const pool = createPool();
-
-  try {
-    const connection = await pool.connect();
-    return await work(connection);
-  } finally {
-    await pool.close();
-  }
-};
-
-const assertSupportedSecret = (context: CollectorContext) => {
-  if (context.connectionSecretRef !== "env:ERP_TEST_DB") {
-    throw new Error(
-      "개발 단계 MSSQL Collector는 env:ERP_TEST_DB secret ref만 지원합니다.",
-    );
-  }
-};
-
 /**
  * MSSQL Collector 어댑터 인스턴스를 생성합니다.
  */
 export const createMssqlCollectorAdapter = (
   context: CollectorContext,
 ): CollectorAdapter => {
-  assertSupportedSecret(context);
+  const withConnection = async <T>(
+    work: (connection: sql.ConnectionPool) => Promise<T>,
+  ) => withMssqlConnection(context, work);
 
   return {
     connect: async (): Promise<ConnectionTestResult> => {
@@ -134,7 +106,7 @@ export const createMssqlCollectorAdapter = (
       } catch (error) {
         return {
           success: false,
-          message: getErpConnectionFailureMessage(error),
+          message: getDbConnectionFailureMessage(error),
           latencyMs: Math.round(performance.now() - startedAt),
         };
       }
@@ -169,7 +141,7 @@ export const createMssqlCollectorAdapter = (
         return {
           collectTime,
           isReachable: false,
-          healthMessage: getErpConnectionFailureMessage(error),
+          healthMessage: getDbConnectionFailureMessage(error),
           latencyMs: Math.round(performance.now() - startedAt),
         };
       }

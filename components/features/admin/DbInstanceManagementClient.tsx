@@ -58,6 +58,15 @@ type DbInstanceForm = {
   connectionSecretRef: string;
 };
 
+type ConnectionSecretForm = {
+  username: string;
+  password: string;
+  encrypt: boolean;
+  trustServerCertificate: boolean;
+  connectString: string;
+  serviceName: string;
+};
+
 type DbInstanceManagementClientProps = {
   initialBusinessSystems: BusinessSystem[];
   initialDbInstances: DbInstance[];
@@ -87,6 +96,15 @@ const defaultDbInstanceForm: DbInstanceForm = {
   sqlAggregateIntervalSec: "300",
   isActive: true,
   connectionSecretRef: "env:ERP_TEST_DB",
+};
+
+const defaultConnectionSecretForm: ConnectionSecretForm = {
+  username: "",
+  password: "",
+  encrypt: true,
+  trustServerCertificate: true,
+  connectString: "",
+  serviceName: "",
 };
 
 const toErrorMessage = async (response: Response) => {
@@ -165,6 +183,11 @@ export const DbInstanceManagementClient = ({
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [secretTargetId, setSecretTargetId] = useState<string | null>(null);
+  const [secretForm, setSecretForm] = useState<ConnectionSecretForm>(
+    defaultConnectionSecretForm,
+  );
+  const [savingSecretId, setSavingSecretId] = useState<string | null>(null);
 
   const businessSystemOptions = useMemo(
     () =>
@@ -275,6 +298,67 @@ export const DbInstanceManagementClient = ({
           ? updateError.message
           : "수집 설정 변경에 실패했습니다.",
       );
+    }
+  };
+
+  const openSecretForm = (instance: DbInstance) => {
+    setSecretTargetId(instance.id);
+    setSecretForm({
+      ...defaultConnectionSecretForm,
+      serviceName: instance.serviceName ?? "",
+    });
+    setMessage(null);
+    setError(null);
+  };
+
+  const saveConnectionSecret = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!secretTargetId) {
+      return;
+    }
+
+    const instance = dbInstances.find((item) => item.id === secretTargetId);
+
+    if (!instance) {
+      return;
+    }
+
+    setSavingSecretId(secretTargetId);
+    setMessage(null);
+    setError(null);
+
+    try {
+      const result = await requestJson<{
+        connectionSecretRef: string;
+      }>(`/api/db-instances/${secretTargetId}/connection-secret`, {
+        method: "POST",
+        body: JSON.stringify({
+          username: secretForm.username,
+          password: secretForm.password,
+          encrypt: secretForm.encrypt,
+          trustServerCertificate: secretForm.trustServerCertificate,
+          connectString:
+            instance.dbmsType === "ORACLE" ? secretForm.connectString : undefined,
+          serviceName:
+            instance.dbmsType === "ORACLE" ? secretForm.serviceName : undefined,
+        }),
+      });
+
+      setSecretForm(defaultConnectionSecretForm);
+      setSecretTargetId(null);
+      setMessage(
+        `접속 Secret을 Vault에 저장했습니다. ref: ${result.connectionSecretRef}`,
+      );
+      await refresh();
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "접속 Secret 저장에 실패했습니다.",
+      );
+    } finally {
+      setSavingSecretId(null);
     }
   };
 
@@ -522,6 +606,7 @@ export const DbInstanceManagementClient = ({
                         connectionSecretRef: event.target.value,
                       }))
                     }
+                    placeholder="env:ERP_TEST_DB 또는 vault:dbmonitoring/instances/{id}"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -592,6 +677,134 @@ export const DbInstanceManagementClient = ({
             </CardContent>
           </Card>
         </div>
+        {secretTargetId ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>접속 Secret 등록</CardTitle>
+              <CardDescription>
+                비밀번호는 Supabase Vault에만 저장되며 API 응답에는 secret ref만
+                반환됩니다.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form className="grid gap-3 md:grid-cols-2" onSubmit={saveConnectionSecret}>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>대상 인스턴스</Label>
+                  <div className="text-sm font-medium">
+                    {dbInstances.find((item) => item.id === secretTargetId)?.instanceName ??
+                      secretTargetId}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="secret-username">DB 사용자</Label>
+                  <Input
+                    id="secret-username"
+                    value={secretForm.username}
+                    onChange={(event) =>
+                      setSecretForm((current) => ({
+                        ...current,
+                        username: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="secret-password">DB 비밀번호</Label>
+                  <Input
+                    id="secret-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={secretForm.password}
+                    onChange={(event) =>
+                      setSecretForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                {dbInstances.find((item) => item.id === secretTargetId)?.dbmsType ===
+                "ORACLE" ? (
+                  <>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label htmlFor="secret-connect-string">Connect String</Label>
+                      <Input
+                        id="secret-connect-string"
+                        value={secretForm.connectString}
+                        onChange={(event) =>
+                          setSecretForm((current) => ({
+                            ...current,
+                            connectString: event.target.value,
+                          }))
+                        }
+                        placeholder="host:1521/service"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="secret-service-name">Service Name</Label>
+                      <Input
+                        id="secret-service-name"
+                        value={secretForm.serviceName}
+                        onChange={(event) =>
+                          setSecretForm((current) => ({
+                            ...current,
+                            serviceName: event.target.value,
+                          }))
+                        }
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="secret-encrypt"
+                        type="checkbox"
+                        checked={secretForm.encrypt}
+                        onChange={(event) =>
+                          setSecretForm((current) => ({
+                            ...current,
+                            encrypt: event.target.checked,
+                          }))
+                        }
+                      />
+                      <Label htmlFor="secret-encrypt">TLS encrypt</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="secret-trust-cert"
+                        type="checkbox"
+                        checked={secretForm.trustServerCertificate}
+                        onChange={(event) =>
+                          setSecretForm((current) => ({
+                            ...current,
+                            trustServerCertificate: event.target.checked,
+                          }))
+                        }
+                      />
+                      <Label htmlFor="secret-trust-cert">인증서 신뢰</Label>
+                    </div>
+                  </>
+                )}
+                <div className="flex gap-2 md:col-span-2">
+                  <Button type="submit" disabled={savingSecretId === secretTargetId}>
+                    {savingSecretId === secretTargetId ? "저장 중" : "Vault에 저장"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSecretTargetId(null);
+                      setSecretForm(defaultConnectionSecretForm);
+                    }}
+                  >
+                    취소
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        ) : null}
         <Card>
           <CardHeader>
             <CardTitle>DB 인스턴스 목록</CardTitle>
@@ -633,6 +846,9 @@ export const DbInstanceManagementClient = ({
                             {instance.host}:{instance.port} /{" "}
                             {instance.databaseName ?? "-"}
                           </div>
+                          <div className="text-muted-foreground text-xs">
+                            ref: {instance.connectionSecretRef}
+                          </div>
                         </TableCell>
                         <TableCell>{instance.dbmsType}</TableCell>
                         <TableCell>{system?.name ?? "-"}</TableCell>
@@ -659,6 +875,13 @@ export const DbInstanceManagementClient = ({
                           )}
                         </TableCell>
                         <TableCell className="space-x-2 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openSecretForm(instance)}
+                          >
+                            Secret 등록
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"

@@ -12,8 +12,12 @@ export type CollectorContext = {
   dbInstanceId: DbInstanceId;
   dbmsType: DbmsType;
   connectionSecretRef: string;
-  databaseName: string | null;
   instanceName: string;
+  host: string;
+  port: number;
+  serviceName: string | null;
+  databaseName: string | null;
+  envType: string;
 };
 
 /** DBMS별 수집 어댑터 공통 인터페이스 */

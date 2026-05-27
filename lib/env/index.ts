@@ -27,8 +27,8 @@ export const ENV_REQUIREMENTS: EnvRequirement[] = [
     requiredIn: ["staging", "production"],
   },
   {
-    key: "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-    description: "브라우저용 Supabase anon key",
+    key: "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    description: "브라우저용 Supabase publishable key",
     requiredIn: ["staging", "production"],
     secret: true,
   },
