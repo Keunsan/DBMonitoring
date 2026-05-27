@@ -15,10 +15,10 @@ export const dynamic = "force-dynamic";
 /**
  * DB 인스턴스 목록과 업무 시스템 참조 데이터를 반환합니다.
  */
-export const GET = withApiHandler(() => ({
+export const GET = withApiHandler(async () => ({
   data: {
-    items: listDbInstances(),
-    businessSystems: listBusinessSystems(),
+    items: await listDbInstances(),
+    businessSystems: await listBusinessSystems(),
   },
 }));
 
@@ -27,7 +27,7 @@ export const GET = withApiHandler(() => ({
  */
 export const POST = withApiHandler(async ({ request }) => {
   const payload = await readJsonObject(request);
-  const instance = createDbInstance(parseDbInstanceInput(payload));
+  const instance = await createDbInstance(parseDbInstanceInput(payload));
 
   return {
     data: instance,

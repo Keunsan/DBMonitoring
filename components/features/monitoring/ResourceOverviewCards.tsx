@@ -38,12 +38,12 @@ const ResourceCard = ({
   metricKey: keyof ResourceSummary;
 }) => (
   <Card>
-    <CardHeader className="pb-2">
+    <CardHeader className="pb-1.5">
       <div className="flex items-center justify-between gap-2">
         <CardDescription>{label}</CardDescription>
         <MetricHealthBadge metricKey={metricKey} value={value} />
       </div>
-      <CardTitle className="text-2xl">
+      <CardTitle className="text-xl">
         {formatValue(value, unit)}
       </CardTitle>
     </CardHeader>
@@ -63,13 +63,13 @@ export const ResourceOverviewCards = ({
   resource,
   compact = false,
 }: ResourceOverviewCardsProps) => (
-  <section className="space-y-3">
+  <section className="space-y-2">
     {title ? <h3 className="text-sm font-medium text-muted-foreground">{title}</h3> : null}
     <div
       className={
         compact
-          ? "grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-          : "grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"
+          ? "grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
+          : "grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5"
       }
     >
       <ResourceCard

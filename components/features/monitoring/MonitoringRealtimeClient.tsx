@@ -2,15 +2,25 @@
 
 /** 실시간 모니터링 화면에서 Collector 실행과 polling 조회를 제공하는 클라이언트 컴포넌트입니다. */
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { DbResourceCard } from "@/components/features/monitoring/DbResourceCard";
+import { DbStoragePanels } from "@/components/features/monitoring/DbStoragePanels";
 import { ResourceMetricGrid } from "@/components/features/monitoring/ResourceMetricGrid";
 import { ResourceOverviewCards } from "@/components/features/monitoring/ResourceOverviewCards";
 import { ResourceTopLists } from "@/components/features/monitoring/ResourceTopLists";
 import { ResourceTrendChart } from "@/components/features/monitoring/ResourceTrendChart";
+import { ThroughputSessionCards } from "@/components/features/monitoring/ThroughputSessionCards";
 import { PageHeader } from "@/components/layout";
 import { EmptyState } from "@/components/shared";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -54,8 +64,14 @@ type SessionItem = {
   waitType: string | null;
   waitMs: number | null;
   sqlId: string | null;
+  blockingSessionId: string | null;
+  command: string | null;
+  cpuTimeMs: number | null;
+  logicalReads: number | null;
+  sqlTextMasked: string | null;
   hostName: string | null;
   programName: string | null;
+  databaseName: string | null;
 };
 
 type SqlItem = {
@@ -134,6 +150,7 @@ export const MonitoringRealtimeClient = ({
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const initialCollectStartedRef = useRef(false);
 
   const activeInstanceId = selectedId ?? items[0]?.instance.id;
 
@@ -143,8 +160,11 @@ export const MonitoringRealtimeClient = ({
     }
     return items.find((item) => item.instance.id === activeInstanceId) ?? items[0];
   }, [activeInstanceId, items]);
+  const shouldAutoCollect = ["realtime", "sessions", "blocking", "top-sql"].includes(
+    variant,
+  );
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     const [summaryPayload, alertPayload] = await Promise.all([
       requestJson<{ items: SummaryItem[] }>("/api/monitoring/summary"),
       requestJson<{ items: AlertEvent[] }>("/api/alerts"),
@@ -152,12 +172,34 @@ export const MonitoringRealtimeClient = ({
 
     setItems(summaryPayload.items);
     setAlerts(alertPayload.items);
-  };
+  }, []);
+
+  const runCollectorSilently = useCallback(async () => {
+    try {
+      await requestJson("/api/collector/run", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      await requestJson("/api/alerts/evaluate", { method: "POST" });
+      await refresh();
+    } catch {
+      // 수집이 이미 진행 중이거나 일시 실패해도 기존 스냅샷으로 화면을 유지합니다.
+    }
+  }, [refresh]);
+
+  const collectAndRefresh = useCallback(async () => {
+    await requestJson("/api/collector/run", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    await requestJson("/api/alerts/evaluate", { method: "POST" });
+    await refresh();
+  }, [refresh]);
 
   useEffect(() => {
     let cancelled = false;
 
-    const tick = async () => {
+    const loadSummary = async () => {
       try {
         await refresh();
         if (!cancelled) {
@@ -174,18 +216,37 @@ export const MonitoringRealtimeClient = ({
       } finally {
         if (!cancelled) {
           setLoading(false);
+
+          if (shouldAutoCollect && !initialCollectStartedRef.current) {
+            initialCollectStartedRef.current = true;
+            window.setTimeout(() => {
+              void runCollectorSilently();
+            }, 0);
+          }
         }
       }
     };
 
-    void tick();
-    const intervalId = window.setInterval(() => void tick(), 10_000);
+    void loadSummary();
+
+    const refreshIntervalId = window.setInterval(() => {
+      void loadSummary();
+    }, 10_000);
+
+    const collectIntervalId = shouldAutoCollect
+      ? window.setInterval(() => {
+          void runCollectorSilently();
+        }, 30_000)
+      : null;
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      window.clearInterval(refreshIntervalId);
+      if (collectIntervalId) {
+        window.clearInterval(collectIntervalId);
+      }
     };
-  }, []);
+  }, [refresh, runCollectorSilently, shouldAutoCollect, variant]);
 
   const runCollector = async () => {
     setRunning(true);
@@ -193,12 +254,7 @@ export const MonitoringRealtimeClient = ({
     setError(null);
 
     try {
-      await requestJson("/api/collector/run", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      await requestJson("/api/alerts/evaluate", { method: "POST" });
-      await refresh();
+      await collectAndRefresh();
       setMessage("Collector 실행과 임계치 평가가 완료되었습니다.");
     } catch (runError) {
       setError(
@@ -222,7 +278,7 @@ export const MonitoringRealtimeClient = ({
   }, [alerts, items]);
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageHeader
         title={title}
         description={description}
@@ -232,16 +288,16 @@ export const MonitoringRealtimeClient = ({
           </Button>
         }
       />
-      <div className="space-y-4 p-6">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {message ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {message}
-          </div>
+          <Alert className="border-emerald-200 bg-emerald-50 text-emerald-700">
+            <AlertDescription className="text-emerald-700">{message}</AlertDescription>
+          </Alert>
         ) : null}
         {error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         ) : null}
         {loading ? (
           <EmptyState title="실시간 데이터를 불러오는 중입니다" />
@@ -285,7 +341,7 @@ const StatCard = ({ title, value }: { title: string; value: number }) => (
   <Card>
     <CardHeader className="pb-2">
       <CardDescription>{title}</CardDescription>
-      <CardTitle className="text-3xl">{formatNumber(value)}</CardTitle>
+      <CardTitle className="text-2xl">{formatNumber(value)}</CardTitle>
     </CardHeader>
   </Card>
 );
@@ -303,17 +359,17 @@ const DashboardResourceView = ({
   }));
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-4">
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-4">
         <StatCard title="전체 DB" value={dashboardStats.total} />
         <StatCard title="수집 정상" value={dashboardStats.ok} />
         <StatCard title="수집 실패" value={dashboardStats.fail} />
         <StatCard title="미확인 알림" value={dashboardStats.alerts} />
       </div>
       <ResourceTopLists items={resourceItems} />
-      <section className="space-y-3">
+      <section className="space-y-2">
         <h3 className="text-sm font-medium">DB별 서버 리소스 현황</h3>
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-3 xl:grid-cols-2">
           {items.map((item) => (
             <DbResourceCard
               key={item.instance.id}
@@ -339,7 +395,7 @@ const RealtimeResourceView = ({
   selectedId: string;
   onSelectId: (id: string) => void;
 }) => (
-  <div className="space-y-6">
+  <div className="space-y-4">
     {items.length > 1 ? (
       <div className="max-w-sm">
         <Select value={selectedId} onValueChange={onSelectId}>
@@ -360,7 +416,30 @@ const RealtimeResourceView = ({
       title={`${item.instance.instanceName} 서버 상태`}
       resource={item.summary.resourceSummary}
     />
+    <ThroughputSessionCards resource={item.summary.resourceSummary} />
     <ResourceTrendChart dbInstanceId={item.instance.id} />
+    <Card>
+      <CardHeader>
+        <CardTitle>DB 용량 · 테이블 크기</CardTitle>
+        <CardDescription>
+          파일그룹·데이터파일 사용률과 상위 테이블 용량입니다.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <DbStoragePanels
+          metrics={item.summary.latestMetrics.map((metric) => ({
+            id: metric.id,
+            tenantId: item.instance.tenantId,
+            dbInstanceId: item.instance.id,
+            metricTime: metric.metricTime,
+            metricName: metric.metricName,
+            metricValue: metric.metricValue,
+            unit: metric.unit,
+            tags: metric.tags ?? {},
+          }))}
+        />
+      </CardContent>
+    </Card>
     <Card>
       <CardHeader>
         <CardTitle>세부 리소스 지표</CardTitle>
@@ -390,20 +469,137 @@ const RealtimeResourceView = ({
   </div>
 );
 
-const SessionsTable = ({ sessions }: { sessions: SessionItem[] }) => (
-  <DataTable title="실시간 세션" empty="수집된 세션이 없습니다.">
-    {sessions.map((session) => (
-      <TableRow key={`${session.sessionId}-${session.sqlId}`}>
-        <TableCell>{session.sessionId}</TableCell>
-        <TableCell>{session.loginName}</TableCell>
-        <TableCell>{session.status}</TableCell>
-        <TableCell>{session.waitType ?? "-"}</TableCell>
-        <TableCell>{session.waitMs ?? 0}</TableCell>
-        <TableCell className="max-w-48 truncate">{session.programName ?? "-"}</TableCell>
-      </TableRow>
-    ))}
-  </DataTable>
-);
+type SessionSortKey =
+  | "sessionId"
+  | "loginName"
+  | "status"
+  | "waitMs"
+  | "blockingSessionId"
+  | "cpuTimeMs"
+  | "logicalReads";
+
+const sessionColumns: Array<{ key: SessionSortKey; label: string }> = [
+  { key: "sessionId", label: "세션 ID" },
+  { key: "loginName", label: "계정" },
+  { key: "status", label: "상태" },
+  { key: "waitMs", label: "대기(ms)" },
+  { key: "blockingSessionId", label: "Blkby" },
+  { key: "cpuTimeMs", label: "CPU(ms)" },
+  { key: "logicalReads", label: "Reads" },
+];
+
+const getSessionSortValue = (session: SessionItem, key: SessionSortKey) => {
+  const value = session[key];
+
+  if (value === null || value === undefined) {
+    return key === "sessionId" || key.endsWith("Ms") || key === "logicalReads" ? -1 : "";
+  }
+
+  if (key === "sessionId" || key.endsWith("Ms") || key === "logicalReads") {
+    return Number(value);
+  }
+
+  return String(value);
+};
+
+const SessionsTable = ({ sessions }: { sessions: SessionItem[] }) => {
+  const [sortKey, setSortKey] = useState<SessionSortKey>("cpuTimeMs");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  const sortedSessions = useMemo(() => {
+    return [...sessions].sort((a, b) => {
+      const left = getSessionSortValue(a, sortKey);
+      const right = getSessionSortValue(b, sortKey);
+      const direction = sortDirection === "asc" ? 1 : -1;
+
+      if (typeof left === "number" && typeof right === "number") {
+        return (left - right) * direction;
+      }
+
+      return String(left).localeCompare(String(right), "ko-KR") * direction;
+    });
+  }, [sessions, sortDirection, sortKey]);
+
+  const toggleSort = (key: SessionSortKey) => {
+    if (sortKey === key) {
+      setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+      return;
+    }
+
+    setSortKey(key);
+    setSortDirection("desc");
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>실시간 세션</CardTitle>
+        <CardDescription>
+          시스템 세션은 SQL Server 기준으로 `is_user_process = 1` 및 세션 ID 50 초과만
+          수집해 제외합니다.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {sortedSessions.length === 0 ? (
+          <EmptyState title="수집된 세션이 없습니다" />
+        ) : (
+          <div className="max-h-[calc(100svh-16rem)] overflow-auto">
+            <div className="min-w-[1180px] rounded-lg border">
+              <div className="sticky top-0 z-10 grid grid-cols-[90px_150px_110px_120px_90px_100px_100px_180px_minmax(280px,1fr)] border-b bg-muted/95 text-xs font-medium text-muted-foreground backdrop-blur">
+                {sessionColumns.map((column) => (
+                  <button
+                    key={column.key}
+                    type="button"
+                    className="px-3 py-2 text-left hover:text-foreground"
+                    onClick={() => toggleSort(column.key)}
+                  >
+                    {column.label}
+                    {sortKey === column.key ? (sortDirection === "asc" ? " ▲" : " ▼") : ""}
+                  </button>
+                ))}
+                <div className="px-3 py-2">프로그램/DB</div>
+                <div className="px-3 py-2">실행 SQL Text</div>
+              </div>
+              {sortedSessions.map((session) => (
+                <div
+                  key={`${session.sessionId}-${session.sqlId}-${session.command ?? ""}`}
+                  className="grid grid-cols-[90px_150px_110px_120px_90px_100px_100px_180px_minmax(280px,1fr)] border-b text-sm last:border-b-0"
+                >
+                  <div className="px-3 py-2 font-medium">{session.sessionId}</div>
+                  <div className="px-3 py-2">{session.loginName}</div>
+                  <div className="px-3 py-2">{session.status}</div>
+                  <div className="px-3 py-2">
+                    <div>{session.waitType ?? "-"}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {session.waitMs ?? 0}ms
+                    </div>
+                  </div>
+                  <div className="px-3 py-2">{session.blockingSessionId ?? "-"}</div>
+                  <div className="px-3 py-2">{formatNumber(session.cpuTimeMs ?? 0)}</div>
+                  <div className="px-3 py-2">{formatNumber(session.logicalReads ?? 0)}</div>
+                  <div className="px-3 py-2">
+                    <div className="truncate">{session.programName ?? "-"}</div>
+                    <div className="text-muted-foreground truncate text-xs">
+                      {session.databaseName ?? "-"} / {session.hostName ?? "-"}
+                    </div>
+                  </div>
+                  <div className="px-3 py-2">
+                    <div className="text-muted-foreground text-xs">
+                      {session.command ?? "-"} / {session.sqlId ?? "-"}
+                    </div>
+                    <div className="line-clamp-2 font-mono text-xs">
+                      {session.sqlTextMasked || "-"}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const SqlTable = ({ sql }: { sql: SqlItem[] }) => (
   <DataTable title="Top SQL" empty="수집된 SQL 성능 데이터가 없습니다.">
@@ -445,7 +641,7 @@ const DeadlockCard = ({ count }: { count: number }) => (
       <CardTitle>Deadlock 현황</CardTitle>
       <CardDescription>최근 수집된 Deadlock 이벤트 수입니다.</CardDescription>
     </CardHeader>
-    <CardContent className="text-3xl font-semibold">{count}건</CardContent>
+    <CardContent className="text-2xl font-semibold">{count}건</CardContent>
   </Card>
 );
 
@@ -477,8 +673,9 @@ const DataTable = ({
       <CardTitle>{title}</CardTitle>
     </CardHeader>
     <CardContent>
-      <Table>
-        <TableHeader>
+      <div className="max-h-[calc(100svh-16rem)] overflow-auto rounded-lg border">
+        <Table>
+        <TableHeader className="sticky top-0 z-10 bg-background">
           <TableRow>
             <TableHead>구분</TableHead>
             <TableHead>값 1</TableHead>
@@ -488,7 +685,8 @@ const DataTable = ({
           </TableRow>
         </TableHeader>
         <TableBody>{children}</TableBody>
-      </Table>
+        </Table>
+      </div>
       {children ? null : <EmptyState title={empty} />}
     </CardContent>
   </Card>

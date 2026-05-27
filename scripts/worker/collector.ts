@@ -8,7 +8,7 @@ import { listSchedulerStatuses, runCollectorOnce } from "@/services/collector";
 /** Collector를 한 번 실행하고 실행 상태 요약을 출력합니다. */
 const main = async () => {
   const results = await runCollectorOnce();
-  const statuses = listSchedulerStatuses();
+  const statuses = await listSchedulerStatuses();
 
   console.info(
     "[collector-worker] 수집 완료:",

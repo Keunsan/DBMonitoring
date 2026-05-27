@@ -86,7 +86,7 @@ PRD §8.1 `DB_INSTANCE` + 수집 §2.1 확장.
 | collector_type | enum | | AGENT, AGENTLESS, API | collector_type |
 | collector_id | varchar | | 할당 Collector | collector_id |
 | collect_interval_sec | int | | 5~60 | 수집 §1.3 |
-| sql_aggregate_interval_sec | int | | 60~300 | |
+| sql_aggregate_interval_sec | int | | 10~300 | |
 | is_active | boolean | | 수집 활성화 | |
 | connection_secret_ref | varchar | | 암호화 저장 키 참조 | NFR-004 |
 | last_collect_at | timestamptz | | | 최종 수집 |

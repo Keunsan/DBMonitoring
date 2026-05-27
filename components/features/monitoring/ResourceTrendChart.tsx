@@ -34,14 +34,15 @@ type ResourceTrendChartProps = {
 const chartConfig = {
   value: {
     label: "값",
-    color: "hsl(var(--chart-1))",
+    color: "var(--chart-1)",
   },
 } satisfies ChartConfig;
 
 const trendMetrics = [
   { key: SERVER_METRIC_KEYS.cpuUsedPercent, label: "CPU %" },
   { key: SERVER_METRIC_KEYS.memoryUsedPercent, label: "메모리 %" },
-  { key: SERVER_METRIC_KEYS.batchRequestsPerSec, label: "Batch/sec" },
+  { key: SERVER_METRIC_KEYS.batchRequestsPerSec, label: "QPS" },
+  { key: SERVER_METRIC_KEYS.transactionsPerSec, label: "TPS" },
 ] as const;
 
 const fetchMetricHistory = async (url: string) => {
@@ -101,7 +102,7 @@ export const ResourceTrendChart = ({
   }, [dbInstanceId]);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {trendMetrics.map((metric) => {
         const items = seriesMap[metric.key] ?? [];
         const chartData = items
@@ -118,7 +119,7 @@ export const ResourceTrendChart = ({
 
         return (
           <Card key={metric.key}>
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-1.5">
               <CardTitle className="text-base">{metric.label}</CardTitle>
               <CardDescription>{title}</CardDescription>
             </CardHeader>
@@ -128,7 +129,7 @@ export const ResourceTrendChart = ({
               ) : chartData.length === 0 ? (
                 <p className="text-muted-foreground text-sm">추이 데이터가 없습니다.</p>
               ) : (
-                <ChartContainer config={chartConfig} className="h-[180px] w-full">
+                <ChartContainer config={chartConfig} className="h-[160px] w-full">
                   <LineChart data={chartData} margin={{ left: 8, right: 8, top: 8 }}>
                     <CartesianGrid vertical={false} />
                     <XAxis dataKey="time" tickLine={false} axisLine={false} hide />
@@ -138,8 +139,10 @@ export const ResourceTrendChart = ({
                       type="monotone"
                       dataKey="value"
                       stroke="var(--color-value)"
-                      strokeWidth={2}
-                      dot={false}
+                      strokeWidth={2.5}
+                      dot={{ r: 2, strokeWidth: 1 }}
+                      activeDot={{ r: 4 }}
+                      connectNulls
                     />
                   </LineChart>
                 </ChartContainer>

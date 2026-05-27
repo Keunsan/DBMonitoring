@@ -40,5 +40,5 @@ Last updated: 2026-05-27 KST
 ## 4. 결정사항
 
 - 1차 구현은 `services/collector`에 배치했습니다.
-- MSSQL은 실제 구현, Oracle/Azure SQL은 스텁 어댑터를 반환합니다.
+- MSSQL과 Azure SQL은 실제 수집 어댑터를 반환하고, Oracle은 스텁 어댑터를 반환합니다.
 - 개발 단계 secret 참조는 `env:ERP_TEST_DB`를 우선 지원합니다.

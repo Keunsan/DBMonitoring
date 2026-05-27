@@ -28,7 +28,7 @@ export const DbResourceCard = ({
 }: DbResourceCardProps) => (
   <Card>
     <CardHeader>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-2">
         <div>
           <CardTitle>{instance.instanceName}</CardTitle>
           <CardDescription>

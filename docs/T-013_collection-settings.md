@@ -28,7 +28,7 @@ Last updated: 2026-05-26 KST
 |------|------|------|
 | `collectorId` | 문자열 또는 null | 할당 Collector ID |
 | `collectIntervalSec` | 5~60 | 실시간 지표 수집 주기 |
-| `sqlAggregateIntervalSec` | 60~300 | Top SQL 집계 주기 |
+| `sqlAggregateIntervalSec` | 10~300 | Top SQL 집계 주기 |
 | `isActive` | boolean | 수집 활성화 여부 |
 | `lastCollectAt` | ISO timestamp/null | 마지막 수집/테스트 시각 |
 | `lastCollectStatus` | `OK`, `FAIL`, `DELAYED`/null | 마지막 수집/테스트 상태 |
@@ -48,7 +48,7 @@ Last updated: 2026-05-26 KST
 검증:
 
 - `collectIntervalSec`: 5~60초
-- `sqlAggregateIntervalSec`: 60~300초
+- `sqlAggregateIntervalSec`: 10~300초
 - 존재하지 않는 인스턴스: 404
 
 ---

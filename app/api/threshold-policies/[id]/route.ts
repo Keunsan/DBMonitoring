@@ -47,7 +47,7 @@ export const PATCH = async (request: Request, { params }: RouteContext) => {
 
     try {
       return {
-        data: updateThresholdPolicy(id, parsePolicyInput(payload)),
+        data: await updateThresholdPolicy(id, parsePolicyInput(payload)),
       };
     } catch (error) {
       throw new ApiRouteError({

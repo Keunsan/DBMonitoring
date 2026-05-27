@@ -42,7 +42,7 @@ Last updated: 2026-05-26 KST
 
 ## 4. 연결 테스트 정책
 
-현재 개발 단계에서는 `MSSQL` + `connectionSecretRef = "env:ERP_TEST_DB"` 조합만 실제 연결 테스트를 수행합니다.
+현재 개발 단계에서는 `MSSQL`/`AZURE_SQL` SQL Server 계열 연결 테스트를 실제 수행합니다.
 
 - 성공 시 `lastConnectionTestStatus = OK`
 - 실패 시 `lastConnectionTestStatus = FAIL`
@@ -50,7 +50,7 @@ Last updated: 2026-05-26 KST
 - 사용자 메시지는 한글로 반환
 - 실제 비밀번호와 connection string은 응답/로그에 노출하지 않음
 
-Oracle/Azure SQL 연결 테스트는 T-017/T-018에서 어댑터가 준비된 뒤 확장합니다.
+Oracle 연결 테스트는 T-017에서 어댑터가 준비된 뒤 확장합니다.
 
 ---
 

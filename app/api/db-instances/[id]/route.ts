@@ -26,7 +26,7 @@ export const PATCH = async (request: Request, { params }: RouteContext) => {
   return withApiHandler(async ({ request: apiRequest }) => {
     const payload = await readJsonObject(apiRequest);
     return {
-      data: updateDbInstance(id, parseDbInstanceInput(payload)),
+      data: await updateDbInstance(id, parseDbInstanceInput(payload)),
     };
   })(request);
 };
@@ -37,8 +37,8 @@ export const PATCH = async (request: Request, { params }: RouteContext) => {
 export const DELETE = async (request: Request, { params }: RouteContext) => {
   const { id } = await params;
 
-  return withApiHandler(() => {
-    deleteDbInstance(id);
+  return withApiHandler(async () => {
+    await deleteDbInstance(id);
     return {
       data: {
         deleted: true,

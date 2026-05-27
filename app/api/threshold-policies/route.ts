@@ -85,7 +85,7 @@ export const POST = withApiHandler(async ({ request }) => {
 
   try {
     return {
-      data: createThresholdPolicy(parsePolicyInput(payload)),
+      data: await createThresholdPolicy(parsePolicyInput(payload)),
       status: 201,
     };
   } catch (error) {

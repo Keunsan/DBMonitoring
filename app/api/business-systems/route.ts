@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
 /**
  * 업무 시스템 목록을 반환합니다.
  */
-export const GET = withApiHandler(() => ({
-  data: listBusinessSystems(),
+export const GET = withApiHandler(async () => ({
+  data: await listBusinessSystems(),
 }));
 
 /**
@@ -23,7 +23,7 @@ export const GET = withApiHandler(() => ({
  */
 export const POST = withApiHandler(async ({ request }) => {
   const payload = await readJsonObject(request);
-  const businessSystem = createBusinessSystem(parseBusinessSystemInput(payload));
+  const businessSystem = await createBusinessSystem(parseBusinessSystemInput(payload));
 
   return {
     data: businessSystem,

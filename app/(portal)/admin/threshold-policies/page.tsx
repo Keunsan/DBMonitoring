@@ -4,12 +4,21 @@ import { ThresholdPolicyManagementClient } from "@/components/features/admin/Thr
 import { listBusinessSystems, listDbInstances } from "@/lib/inventory/store";
 import { listThresholdPolicies } from "@/services/alert";
 
-const ThresholdPoliciesPage = () => (
-  <ThresholdPolicyManagementClient
-    businessSystems={listBusinessSystems()}
-    dbInstances={listDbInstances()}
-    initialPolicies={listThresholdPolicies()}
-  />
-);
+export const dynamic = "force-dynamic";
+
+const ThresholdPoliciesPage = async () => {
+  const [businessSystems, dbInstances] = await Promise.all([
+    listBusinessSystems(),
+    listDbInstances(),
+  ]);
+
+  return (
+    <ThresholdPolicyManagementClient
+      businessSystems={businessSystems}
+      dbInstances={dbInstances}
+      initialPolicies={listThresholdPolicies()}
+    />
+  );
+};
 
 export default ThresholdPoliciesPage;

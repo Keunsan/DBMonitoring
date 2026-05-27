@@ -21,9 +21,11 @@ export const AppShell = ({ children }: AppShellProps) => {
     <TooltipProvider>
       <SidebarProvider>
         <AppSidebar />
-        <SidebarInset>
+        <SidebarInset className="max-h-svh min-h-svh overflow-hidden">
           <AppHeader />
-          <div className="flex flex-1 flex-col bg-muted/20">{children}</div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted/20">
+            {children}
+          </div>
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>

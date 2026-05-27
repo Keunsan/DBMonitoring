@@ -3,11 +3,18 @@
 import { DbInstanceManagementClient } from "@/components/features/admin/DbInstanceManagementClient";
 import { listBusinessSystems, listDbInstances } from "@/lib/inventory/store";
 
-const DbInstancesPage = () => {
+export const dynamic = "force-dynamic";
+
+const DbInstancesPage = async () => {
+  const [businessSystems, dbInstances] = await Promise.all([
+    listBusinessSystems(),
+    listDbInstances(),
+  ]);
+
   return (
     <DbInstanceManagementClient
-      initialBusinessSystems={listBusinessSystems()}
-      initialDbInstances={listDbInstances()}
+      initialBusinessSystems={businessSystems}
+      initialDbInstances={dbInstances}
     />
   );
 };

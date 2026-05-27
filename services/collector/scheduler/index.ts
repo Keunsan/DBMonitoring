@@ -5,6 +5,7 @@ import { createCollectorAdapter } from "@/services/collector/registry";
 import type { CollectorContext, CollectorRunResult } from "@/services/collector/types";
 import { saveCollectorRun } from "@/services/storage";
 import type { CollectStatus, DbInstanceId } from "@/types/domain";
+import type { DbInstance } from "@/types/entities";
 
 export type SchedulerStatus = {
   dbInstanceId: DbInstanceId;
@@ -66,7 +67,7 @@ const getOrCreateStatus = (
 const calculateNextRunAt = (collectIntervalSec: number) =>
   new Date(Date.now() + collectIntervalSec * 1_000).toISOString();
 
-const toCollectorContext = (instance: ReturnType<typeof listDbInstances>[number]): CollectorContext => ({
+const toCollectorContext = (instance: DbInstance): CollectorContext => ({
   dbInstanceId: instance.id,
   dbmsType: instance.dbmsType,
   connectionSecretRef: instance.connectionSecretRef,
@@ -99,8 +100,8 @@ const createFailedResult = (
 /**
  * 활성 DB 인스턴스에 대한 스케줄러 상태 목록을 반환합니다.
  */
-export const listSchedulerStatuses = (): SchedulerStatus[] => {
-  const instances = listDbInstances();
+export const listSchedulerStatuses = async (): Promise<SchedulerStatus[]> => {
+  const instances = await listDbInstances();
 
   return instances.map((instance) => {
     const status = getOrCreateStatus(instance.id, instance.collectIntervalSec);
@@ -123,7 +124,7 @@ export const listSchedulerStatuses = (): SchedulerStatus[] => {
 export const runCollectorForInstance = async (
   dbInstanceId: DbInstanceId,
 ): Promise<CollectorRunResult> => {
-  const instance = listDbInstances().find((item) => item.id === dbInstanceId);
+  const instance = (await listDbInstances()).find((item) => item.id === dbInstanceId);
 
   if (!instance) {
     throw new Error("DB 인스턴스를 찾을 수 없습니다.");
@@ -134,12 +135,24 @@ export const runCollectorForInstance = async (
   }
 
   const status = getOrCreateStatus(instance.id, instance.collectIntervalSec);
+  const startedAt = now();
 
   if (status.isRunning) {
-    throw new Error("이미 해당 DB 인스턴스 수집이 진행 중입니다.");
+    return {
+      dbInstanceId: instance.id,
+      startedAt,
+      finishedAt: now(),
+      status: "OK",
+      availability: null,
+      metrics: [],
+      sessions: [],
+      locks: [],
+      deadlocks: [],
+      sql: [],
+      errorMessage: null,
+    };
   }
 
-  const startedAt = now();
   status.isRunning = true;
 
   try {
@@ -171,7 +184,7 @@ export const runCollectorForInstance = async (
     };
 
     saveCollectorRun(result);
-    updateCollectStatus(instance.id, "OK");
+    await updateCollectStatus(instance.id, "OK");
     status.lastStatus = "OK";
     status.lastErrorMessage = null;
     status.consecutiveFailures = 0;
@@ -183,7 +196,7 @@ export const runCollectorForInstance = async (
     const result = createFailedResult(instance.id, startedAt, error);
 
     saveCollectorRun(result);
-    updateCollectStatus(instance.id, "FAIL");
+    await updateCollectStatus(instance.id, "FAIL");
     status.lastStatus = "FAIL";
     status.lastErrorMessage = result.errorMessage;
     status.consecutiveFailures += 1;
@@ -200,7 +213,7 @@ export const runCollectorForInstance = async (
  * 활성화된 모든 DB 인스턴스를 한 번씩 수집합니다.
  */
 export const runCollectorOnce = async () => {
-  const activeInstances = listDbInstances().filter((instance) => instance.isActive);
+  const activeInstances = (await listDbInstances()).filter((instance) => instance.isActive);
   const results: CollectorRunResult[] = [];
 
   for (const instance of activeInstances) {

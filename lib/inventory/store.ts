@@ -1,12 +1,31 @@
 /** Phase 3 DB 인스턴스 관리용 개발 메모리 저장소입니다. */
 
 import { ApiRouteError, badRequest, notFound } from "@/lib/api";
-import { parseConnectionSecretRef } from "@/lib/secrets/refs";
+import { isSupabaseServerConfigured } from "@/lib/db/supabase-server";
+import {
+  buildVaultConnectionSecretRef,
+  parseConnectionSecretRef,
+} from "@/lib/secrets/refs";
 import { toConnectionTestApiError } from "@/lib/secrets/errors";
 import { maskHost, formatSecretRefForLog } from "@/lib/security/mask";
 import { createCollectorAdapter } from "@/services/collector/registry";
 
 import type { CollectorContext } from "@/services/collector/types";
+import {
+  createBusinessSystemInSupabase,
+  createDbInstanceInSupabase,
+  deleteBusinessSystemFromSupabase,
+  deleteDbInstanceFromSupabase,
+  getDbInstanceFromSupabase,
+  listBusinessSystemsFromSupabase,
+  listDbInstancesFromSupabase,
+  updateBusinessSystemInSupabase,
+  updateCollectStatusInSupabase,
+  updateCollectionSettingsInSupabase,
+  updateConnectionTestStatusInSupabase,
+  updateDbInstanceInSupabase,
+  updateDbInstanceSecretRefInSupabase,
+} from "@/lib/inventory/supabase-store";
 import {
   DEFAULT_TENANT_ID,
   type CollectStatus,
@@ -46,7 +65,7 @@ export type DbInstanceInput = {
   collectIntervalSec: number;
   sqlAggregateIntervalSec: number;
   isActive: boolean;
-  connectionSecretRef: string;
+  connectionSecretRef?: string | null;
 };
 
 export type CollectionSettingsInput = {
@@ -61,6 +80,8 @@ type GlobalInventoryState = typeof globalThis & {
 };
 
 const now = () => new Date().toISOString();
+
+const shouldUseSupabaseInventory = () => isSupabaseServerConfigured();
 
 const normalizeDbInstance = (instance: DbInstance): DbInstance => ({
   ...instance,
@@ -210,8 +231,8 @@ const validateCollectionIntervals = (
     throw badRequest("수집 주기는 5~60초 범위여야 합니다.");
   }
 
-  if (sqlAggregateIntervalSec < 60 || sqlAggregateIntervalSec > 300) {
-    throw badRequest("SQL 집계 주기는 60~300초 범위여야 합니다.");
+  if (sqlAggregateIntervalSec < 10 || sqlAggregateIntervalSec > 300) {
+    throw badRequest("SQL 집계 주기는 10~300초 범위여야 합니다.");
   }
 };
 
@@ -274,7 +295,13 @@ export const parseDbInstanceInput = (
     sqlAggregateIntervalSec,
     isActive: parseBoolean(payload, "isActive", true),
     connectionSecretRef: (() => {
-      const ref = requireString(payload, "connectionSecretRef");
+      const value = payload.connectionSecretRef;
+
+      if (typeof value !== "string" || value.trim().length === 0) {
+        return null;
+      }
+
+      const ref = value.trim();
       parseConnectionSecretRef(ref);
       return ref;
     })(),
@@ -301,9 +328,19 @@ export const parseCollectionSettingsInput = (
   };
 };
 
-export const listBusinessSystems = () => getState().businessSystems;
+export const listBusinessSystems = async () => {
+  if (shouldUseSupabaseInventory()) {
+    return listBusinessSystemsFromSupabase();
+  }
 
-export const createBusinessSystem = (input: BusinessSystemInput) => {
+  return getState().businessSystems;
+};
+
+export const createBusinessSystem = async (input: BusinessSystemInput) => {
+  if (shouldUseSupabaseInventory()) {
+    return createBusinessSystemInSupabase(input);
+  }
+
   const state = getState();
 
   if (state.businessSystems.some((system) => system.code === input.code)) {
@@ -326,10 +363,14 @@ export const createBusinessSystem = (input: BusinessSystemInput) => {
   return businessSystem;
 };
 
-export const updateBusinessSystem = (
+export const updateBusinessSystem = async (
   id: string,
   input: BusinessSystemInput,
 ) => {
+  if (shouldUseSupabaseInventory()) {
+    return updateBusinessSystemInSupabase(id, input);
+  }
+
   const state = getState();
   const index = state.businessSystems.findIndex((system) => system.id === id);
 
@@ -340,6 +381,7 @@ export const updateBusinessSystem = (
   state.businessSystems[index] = {
     ...state.businessSystems[index],
     ...input,
+    code: state.businessSystems[index].code,
     ownerDept: input.ownerDept ?? null,
     ownerName: input.ownerName ?? null,
     ownerEmail: input.ownerEmail ?? null,
@@ -349,7 +391,12 @@ export const updateBusinessSystem = (
   return state.businessSystems[index];
 };
 
-export const deleteBusinessSystem = (id: string) => {
+export const deleteBusinessSystem = async (id: string) => {
+  if (shouldUseSupabaseInventory()) {
+    await deleteBusinessSystemFromSupabase(id);
+    return;
+  }
+
   const state = getState();
 
   if (state.dbInstances.some((instance) => instance.businessSystemId === id)) {
@@ -369,10 +416,19 @@ export const deleteBusinessSystem = (id: string) => {
   state.businessSystems = nextSystems;
 };
 
-export const listDbInstances = () =>
-  getState().dbInstances.map((instance) => normalizeDbInstance(instance));
+export const listDbInstances = async () => {
+  if (shouldUseSupabaseInventory()) {
+    return listDbInstancesFromSupabase();
+  }
 
-export const getDbInstance = (id: string) => {
+  return getState().dbInstances.map((instance) => normalizeDbInstance(instance));
+};
+
+export const getDbInstance = async (id: string) => {
+  if (shouldUseSupabaseInventory()) {
+    return getDbInstanceFromSupabase(id);
+  }
+
   const instance = getState().dbInstances.find((item) => item.id === id);
 
   if (!instance) {
@@ -382,7 +438,11 @@ export const getDbInstance = (id: string) => {
   return normalizeDbInstance(instance);
 };
 
-export const createDbInstance = (input: DbInstanceInput) => {
+export const createDbInstance = async (input: DbInstanceInput) => {
+  if (shouldUseSupabaseInventory()) {
+    return createDbInstanceInSupabase(input);
+  }
+
   const state = getState();
 
   if (!state.businessSystems.some((system) => system.id === input.businessSystemId)) {
@@ -390,13 +450,15 @@ export const createDbInstance = (input: DbInstanceInput) => {
   }
 
   const createdAt = now();
+  const id = createId();
   const instance: DbInstance = {
-    id: createId(),
+    id,
     tenantId: DEFAULT_TENANT_ID,
     ...input,
     serviceName: input.serviceName ?? null,
     databaseName: input.databaseName ?? null,
     collectorId: input.collectorId ?? null,
+    connectionSecretRef: input.connectionSecretRef ?? buildVaultConnectionSecretRef(id),
     lastCollectAt: null,
     lastCollectStatus: null,
     lastConnectionTestAt: null,
@@ -412,14 +474,22 @@ export const createDbInstance = (input: DbInstanceInput) => {
 /**
  * DB 인스턴스의 connection_secret_ref만 갱신합니다.
  */
-export const updateDbInstanceSecretRef = (id: string, connectionSecretRef: string) => {
-  const instance = getDbInstance(id);
+export const updateDbInstanceSecretRef = async (id: string, connectionSecretRef: string) => {
+  if (shouldUseSupabaseInventory()) {
+    return updateDbInstanceSecretRefInSupabase(id, connectionSecretRef);
+  }
+
+  const instance = await getDbInstance(id);
   instance.connectionSecretRef = connectionSecretRef;
   instance.updatedAt = now();
   return instance;
 };
 
-export const updateDbInstance = (id: string, input: DbInstanceInput) => {
+export const updateDbInstance = async (id: string, input: DbInstanceInput) => {
+  if (shouldUseSupabaseInventory()) {
+    return updateDbInstanceInSupabase(id, input);
+  }
+
   const state = getState();
   const index = state.dbInstances.findIndex((instance) => instance.id === id);
 
@@ -433,13 +503,20 @@ export const updateDbInstance = (id: string, input: DbInstanceInput) => {
     serviceName: input.serviceName ?? null,
     databaseName: input.databaseName ?? null,
     collectorId: input.collectorId ?? null,
+    connectionSecretRef:
+      input.connectionSecretRef ?? state.dbInstances[index].connectionSecretRef,
     updatedAt: now(),
   };
 
   return state.dbInstances[index];
 };
 
-export const deleteDbInstance = (id: string) => {
+export const deleteDbInstance = async (id: string) => {
+  if (shouldUseSupabaseInventory()) {
+    await deleteDbInstanceFromSupabase(id);
+    return;
+  }
+
   const state = getState();
   const nextInstances = state.dbInstances.filter((instance) => instance.id !== id);
 
@@ -450,10 +527,14 @@ export const deleteDbInstance = (id: string) => {
   state.dbInstances = nextInstances;
 };
 
-export const updateCollectionSettings = (
+export const updateCollectionSettings = async (
   id: string,
   input: CollectionSettingsInput,
 ) => {
+  if (shouldUseSupabaseInventory()) {
+    return updateCollectionSettingsInSupabase(id, input);
+  }
+
   const instance = getState().dbInstances.find((item) => item.id === id);
 
   if (!instance) {
@@ -471,7 +552,11 @@ export const updateCollectionSettings = (
   return instance;
 };
 
-export const updateCollectStatus = (id: string, status: CollectStatus) => {
+export const updateCollectStatus = async (id: string, status: CollectStatus) => {
+  if (shouldUseSupabaseInventory()) {
+    return updateCollectStatusInSupabase(id, status);
+  }
+
   const instance = getState().dbInstances.find((item) => item.id === id);
 
   if (!instance) {
@@ -484,7 +569,11 @@ export const updateCollectStatus = (id: string, status: CollectStatus) => {
   return instance;
 };
 
-const updateConnectionTestStatus = (id: string, status: CollectStatus) => {
+const updateConnectionTestStatus = async (id: string, status: CollectStatus) => {
+  if (shouldUseSupabaseInventory()) {
+    return updateConnectionTestStatusInSupabase(id, status);
+  }
+
   const instance = getState().dbInstances.find((item) => item.id === id);
 
   if (!instance) {
@@ -509,7 +598,7 @@ const toCollectorContext = (instance: DbInstance): CollectorContext => ({
 });
 
 export const testDbInstanceConnection = async (id: string) => {
-  const instance = getDbInstance(id);
+  const instance = await getDbInstance(id);
   const context = toCollectorContext(instance);
 
   try {
@@ -517,11 +606,11 @@ export const testDbInstanceConnection = async (id: string) => {
     const result = await adapter.connect();
 
     if (!result.success) {
-      updateConnectionTestStatus(id, "FAIL");
+      await updateConnectionTestStatus(id, "FAIL");
       throw toConnectionTestApiError(new Error(result.message));
     }
 
-    updateConnectionTestStatus(id, "OK");
+    await updateConnectionTestStatus(id, "OK");
 
     return {
       status: "connected",
@@ -535,7 +624,7 @@ export const testDbInstanceConnection = async (id: string) => {
       checkedAt: now(),
     };
   } catch (error) {
-    updateConnectionTestStatus(id, "FAIL");
+    await updateConnectionTestStatus(id, "FAIL");
     throw toConnectionTestApiError(error);
   }
 };

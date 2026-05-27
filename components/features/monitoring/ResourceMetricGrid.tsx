@@ -32,16 +32,25 @@ const metricLabels: Record<string, string> = {
   [SERVER_METRIC_KEYS.diskWriteIops]: "디스크 쓰기 IOPS",
   [SERVER_METRIC_KEYS.diskReadLatencyMs]: "디스크 읽기 지연",
   [SERVER_METRIC_KEYS.diskWriteLatencyMs]: "디스크 쓰기 지연",
+  [SERVER_METRIC_KEYS.azureDataIoUsedPercent]: "Azure Data IO 사용률",
+  [SERVER_METRIC_KEYS.azureLogWriteUsedPercent]: "Azure Log Write 사용률",
   [SERVER_METRIC_KEYS.storageDataUsedMb]: "데이터 사용량",
   [SERVER_METRIC_KEYS.storageDataSizeMb]: "데이터 파일 크기",
   [SERVER_METRIC_KEYS.logUsedPercent]: "로그 사용률",
   [SERVER_METRIC_KEYS.logUsedMb]: "로그 사용량",
   [SERVER_METRIC_KEYS.tempdbUsedMb]: "TempDB 사용량",
-  [SERVER_METRIC_KEYS.batchRequestsPerSec]: "Batch Requests/sec",
-  [SERVER_METRIC_KEYS.transactionsPerSec]: "Transactions/sec",
+  [SERVER_METRIC_KEYS.batchRequestsPerSec]: "QPS (Batch Requests/sec)",
+  [SERVER_METRIC_KEYS.transactionsPerSec]: "TPS (Transactions/sec)",
   [SERVER_METRIC_KEYS.userConnections]: "User Connections",
   [SERVER_METRIC_KEYS.processesBlocked]: "Processes Blocked",
+  [SERVER_METRIC_KEYS.sessionTotalCount]: "전체 사용자 세션",
+  [SERVER_METRIC_KEYS.sessionActiveCount]: "활성 세션",
+  [SERVER_METRIC_KEYS.sessionIdleCount]: "유휴 세션",
+  [SERVER_METRIC_KEYS.sessionRunningSqlCount]: "SQL 실행 중 세션",
 };
+
+const isTaggedDetailMetric = (metric: MetricHistoryRecord) =>
+  Boolean(metric.tags.filegroupName || metric.tags.fileName || metric.tags.tableKey);
 
 const resourceKeyByMetric: Partial<Record<string, keyof ResourceSummary>> = {
   [SERVER_METRIC_KEYS.cpuUsedPercent]: "cpuUsedPercent",
@@ -72,7 +81,8 @@ const formatNumber = (value: number, unit: string | null) => {
  */
 export const ResourceMetricGrid = ({ metrics, resource }: ResourceMetricGridProps) => {
   const summary = resource ?? buildResourceSummary(metrics);
-  const sorted = [...metrics].sort((a, b) =>
+  const scalarMetrics = metrics.filter((metric) => !isTaggedDetailMetric(metric));
+  const sorted = [...scalarMetrics].sort((a, b) =>
     (metricLabels[a.metricName] ?? a.metricName).localeCompare(
       metricLabels[b.metricName] ?? b.metricName,
       "ko",

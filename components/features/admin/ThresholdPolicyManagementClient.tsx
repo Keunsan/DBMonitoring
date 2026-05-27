@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import {
   Table,
   TableBody,
@@ -152,13 +153,13 @@ export const ThresholdPolicyManagementClient = ({
   };
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageHeader
         title="임계치 정책 관리"
         description="기본 정책, 업무 시스템별 정책, DB 인스턴스별 정책을 관리합니다."
         actions={<Button onClick={() => void refresh()}>새로고침</Button>}
       />
-      <div className="grid gap-4 p-6 xl:grid-cols-[420px_1fr]">
+      <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto p-4 xl:grid-cols-[400px_1fr]">
         <Card>
           <CardHeader>
             <CardTitle>정책 등록</CardTitle>
@@ -166,7 +167,7 @@ export const ThresholdPolicyManagementClient = ({
               우선순위는 DB 인스턴스 &gt; 업무 시스템 &gt; 기본 정책입니다.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2.5">
             {message ? <p className="text-sm text-emerald-700">{message}</p> : null}
             {error ? <p className="text-sm text-red-700">{error}</p> : null}
             <SelectLike
@@ -207,7 +208,7 @@ export const ThresholdPolicyManagementClient = ({
               }
               options={metricOptions.map(([value, label]) => [value, label])}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <InputField
                 label="주의 기준"
                 value={form.warningThreshold}
@@ -223,7 +224,7 @@ export const ThresholdPolicyManagementClient = ({
                 }
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <SelectLike
                 label="비교"
                 value={form.comparison}
@@ -336,17 +337,17 @@ const SelectLike = ({
 }) => (
   <div className="space-y-1">
     <Label>{label}</Label>
-    <select
-      className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+    <NativeSelect
+      className="w-full"
       value={value}
       onChange={(event) => onChange(event.target.value)}
     >
-      <option value="">선택</option>
+      <NativeSelectOption value="">선택</NativeSelectOption>
       {options.map(([optionValue, optionLabel]) => (
-        <option key={optionValue} value={optionValue}>
+        <NativeSelectOption key={optionValue} value={optionValue}>
           {optionLabel}
-        </option>
+        </NativeSelectOption>
       ))}
-    </select>
+    </NativeSelect>
   </div>
 );

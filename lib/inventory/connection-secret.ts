@@ -30,7 +30,7 @@ export const saveDbInstanceConnectionSecret = async (
   id: string,
   payload: ConnectionSecretInput,
 ) => {
-  const instance = getDbInstance(id);
+  const instance = await getDbInstance(id);
   const credential = parseConnectionCredentialInput(
     {
       username: payload.username,
@@ -54,7 +54,7 @@ export const saveDbInstanceConnectionSecret = async (
   );
 
   const connectionSecretRef = buildVaultConnectionSecretRef(id);
-  const updated = updateDbInstanceSecretRef(id, connectionSecretRef);
+  const updated = await updateDbInstanceSecretRef(id, connectionSecretRef);
 
   return {
     dbInstanceId: id,
@@ -68,7 +68,7 @@ export const saveDbInstanceConnectionSecret = async (
  * DB 인스턴스 접속 Secret을 Vault에서 삭제합니다.
  */
 export const removeDbInstanceConnectionSecret = async (id: string) => {
-  const instance = getDbInstance(id);
+  const instance = await getDbInstance(id);
   const parsed = parseConnectionSecretRef(instance.connectionSecretRef);
 
   if (parsed.kind !== "vault") {

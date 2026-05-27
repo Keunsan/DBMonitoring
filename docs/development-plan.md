@@ -413,7 +413,7 @@ flowchart TD
 | 산출물 | [T-013_collection-settings.md](./T-013_collection-settings.md), `app/api/db-instances/[id]/collection-settings/route.ts` |
 | 진행 상태 | `완료` |
 | 완료 여부 | ☑ |
-| 작업 내역 | 2026-05-26 AGENT: 인스턴스별 수집 주기(5~60초), SQL 집계 주기(60~300초), Collector ID, 활성화 상태 조회/수정 API와 화면 토글 구현. |
+| 작업 내역 | 2026-05-26 AGENT: 인스턴스별 수집 주기(5~60초), SQL 집계 주기(10~300초), Collector ID, 활성화 상태 조회/수정 API와 화면 토글 구현. |
 | 이슈/결정사항 | 현재는 개발용 메모리 저장소에 반영. 실제 Collector scheduler 반영은 T-016에서 `services/collector/scheduler`와 연결. |
 
 ---
@@ -504,12 +504,12 @@ flowchart TD
 | 후행 작업 | 없음 (2차 확장) |
 | Phase | 4 |
 | 목표 | Azure Monitor Metrics + DMV 하이브리드 수집 |
-| 상세 작업 | Azure Monitor/Resource Graph 연동, API 호출 제한 처리 |
+| 상세 작업 | MSSQL 호환 DMV 수집, `sys.dm_db_resource_stats` 보강, Azure Monitor/Resource Graph 연동 확장 |
 | 완료 기준 | Azure SQL 테스트 인스턴스 지표 수집 |
 | 산출물 | [T-018_azure-sql-collector-stub.md](./T-018_azure-sql-collector-stub.md), `services/collector/adapters/azure-sql/*` |
-| 진행 상태 | `완료(스텁)` |
+| 진행 상태 | `완료(DMV 기반)` |
 | 완료 여부 | ☑ |
-| 작업 내역 | 2026-05-27 AGENT: 공통 Collector registry에 등록 가능한 Azure SQL 스텁 어댑터 구현. Azure Monitor 연동은 후속 확장. |
+| 작업 내역 | 2026-05-27 AGENT: 공통 Collector registry에 등록 가능한 Azure SQL 스텁 어댑터 구현. Azure Monitor 연동은 후속 확장.<br>2026-05-28 AGENT: MSSQL 호환 DMV 기반으로 지표·세션·Blocking·SQL·DB/테이블 용량 수집을 활성화하고 `sys.dm_db_resource_stats` 기반 Azure SQL CPU/메모리/Data IO/Log Write 지표를 보강. |
 
 ---
 

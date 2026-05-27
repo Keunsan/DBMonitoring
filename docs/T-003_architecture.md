@@ -24,7 +24,7 @@ Last updated: 2026-05-26 KST
 | Queue | 1차는 in-process scheduler, 부하 증가 시 Redis/BullMQ | PRD의 Redis/BullMQ는 확장 단계로 반영 |
 | 운영 DB | Supabase(PostgreSQL) 우선 | 프로젝트 규칙 및 Auth/DB 연계 |
 | 시계열 | PostgreSQL 파티션으로 시작, TimescaleDB 호환 구조 유지 | 인프라 확정 전 MVP 구현 가능 |
-| DBMS 수집 | MSSQL Agentless 완전 구현, Oracle/Azure는 어댑터 인터페이스만 | T-001 MVP 범위 |
+| DBMS 수집 | MSSQL Agentless 완전 구현, Azure SQL DMV 기반 구현, Oracle은 어댑터 인터페이스만 | T-001 MVP 범위 |
 
 > 백엔드 프레임워크는 Next.js로 통합하고, API는 Route Handlers 중심으로 구현합니다. 장시간 수집 작업은 Next.js 요청 생명주기와 분리될 수 있도록 Worker 모듈로 독립 실행 가능하게 둡니다.
 
@@ -98,7 +98,7 @@ flowchart TD
 |--------|----------|------|
 | MSSQL | 구현 | DMV, Query Store, Deadlock XML 수집 |
 | Oracle | 스텁 | 인터페이스만 유지, ASH/AWR 라이선스 검토 후 구현 |
-| Azure SQL | 스텁 | Azure Monitor/API 권한 확정 후 구현 |
+| Azure SQL | DMV 기반 구현 | MSSQL 호환 DMV + Azure SQL resource stats 수집, Azure Monitor/API는 후속 확장 |
 
 **공통 인터페이스 후보**
 
@@ -267,7 +267,7 @@ sequenceDiagram
 | Backend Framework | Next.js 16 App Router로 통합 |
 | Queue | MVP에서는 선택, Collector 부하 증가 시 Redis/BullMQ 도입 |
 | 실시간 | polling/SSE 우선, WebSocket은 필요 시 확장 |
-| DBMS | MSSQL 구현, Oracle/Azure는 인터페이스 |
+| DBMS | MSSQL 구현, Azure SQL DMV 기반 구현, Oracle은 인터페이스 |
 
 ---
 

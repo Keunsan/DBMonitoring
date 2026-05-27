@@ -26,7 +26,7 @@ export const PATCH = async (request: Request, { params }: RouteContext) => {
   return withApiHandler(async ({ request: apiRequest }) => {
     const payload = await readJsonObject(apiRequest);
     return {
-      data: updateBusinessSystem(id, parseBusinessSystemInput(payload)),
+      data: await updateBusinessSystem(id, parseBusinessSystemInput(payload)),
     };
   })(request);
 };
@@ -37,8 +37,8 @@ export const PATCH = async (request: Request, { params }: RouteContext) => {
 export const DELETE = async (request: Request, { params }: RouteContext) => {
   const { id } = await params;
 
-  return withApiHandler(() => {
-    deleteBusinessSystem(id);
+  return withApiHandler(async () => {
+    await deleteBusinessSystem(id);
     return {
       data: {
         deleted: true,

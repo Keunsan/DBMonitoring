@@ -31,6 +31,10 @@ type MetricRow = {
   instanceName: string | null;
 };
 
+type CounterRateRow = MetricRow & {
+  elapsedSeconds: number;
+};
+
 type SessionRow = {
   sessionId: number;
   loginName: string;
@@ -38,9 +42,19 @@ type SessionRow = {
   waitType: string | null;
   waitMs: number | null;
   sqlId: string | null;
+  blockingSessionId: number | null;
+  command: string | null;
+  cpuTimeMs: number | null;
+  logicalReads: number | null;
+  sqlTextMasked: string | null;
   hostName: string | null;
   programName: string | null;
   databaseName: string | null;
+};
+
+type CpuRingBufferRow = {
+  sqlProcessCpuPercent: number | null;
+  systemIdlePercent: number | null;
 };
 
 type BlockingRow = {
@@ -166,6 +180,8 @@ export const createMssqlCollectorAdapter = (
             tags,
           });
         };
+        const hasMetric = (metricName: string) =>
+          metrics.some((metric) => metric.metricName === metricName);
 
         const safeQuery = async <T>(label: string, query: () => Promise<T>) => {
           try {
@@ -177,6 +193,59 @@ export const createMssqlCollectorAdapter = (
             return null;
           }
         };
+
+        const rateCounterRows = await safeQuery("performance_counter_rates", async () => {
+          const result = await connection.request().query<CounterRateRow>(`
+            DECLARE @startedAt datetime2(7) = SYSDATETIME();
+
+            SELECT
+              RTRIM(object_name) AS objectName,
+              NULLIF(RTRIM(instance_name), '') AS instanceName,
+              RTRIM(counter_name) AS metricName,
+              CAST(cntr_value AS float) AS startedValue
+            INTO #counter_sample_start
+            FROM sys.dm_os_performance_counters
+            WHERE counter_name IN (
+              'Batch Requests/sec',
+              'Transactions/sec',
+              'Log Flushes/sec'
+            );
+
+            WAITFOR DELAY '00:00:01';
+
+            DECLARE @finishedAt datetime2(7) = SYSDATETIME();
+            DECLARE @elapsedSeconds float =
+              DATEDIFF_BIG(millisecond, @startedAt, @finishedAt) / 1000.0;
+
+            SELECT
+              RTRIM(current_counter.counter_name) AS metricName,
+              CAST(
+                CASE
+                  WHEN @elapsedSeconds > 0
+                    THEN (CAST(current_counter.cntr_value AS float) - start_counter.startedValue)
+                      / @elapsedSeconds
+                  ELSE 0
+                END AS float
+              ) AS metricValue,
+              'per_second' AS unit,
+              RTRIM(current_counter.object_name) AS objectName,
+              NULLIF(RTRIM(current_counter.instance_name), '') AS instanceName,
+              @elapsedSeconds AS elapsedSeconds
+            FROM sys.dm_os_performance_counters current_counter
+            INNER JOIN #counter_sample_start start_counter
+              ON RTRIM(current_counter.object_name) = start_counter.objectName
+              AND ISNULL(NULLIF(RTRIM(current_counter.instance_name), ''), '') =
+                ISNULL(start_counter.instanceName, '')
+              AND RTRIM(current_counter.counter_name) = start_counter.metricName
+            WHERE current_counter.counter_name IN (
+              'Batch Requests/sec',
+              'Transactions/sec',
+              'Log Flushes/sec'
+            );
+          `);
+
+          return result.recordset.filter((row) => row.metricValue >= 0);
+        });
 
         const counterRows = await safeQuery("performance_counters", async () => {
           const result = await connection.request().query<MetricRow>(`
@@ -207,6 +276,7 @@ export const createMssqlCollectorAdapter = (
         });
 
         if (counterRows) {
+          const rateRows = rateCounterRows ?? [];
           const counterMap = new Map(
             counterRows.map((row) => [
               `${row.objectName ?? ""}|${row.instanceName ?? ""}|${row.metricName}`,
@@ -215,8 +285,36 @@ export const createMssqlCollectorAdapter = (
           );
 
           const getCounter = (objectName: string, counterName: string, instance = "") => {
-            const key = `${objectName}|${instance}|${counterName}`;
-            return counterMap.get(key);
+            const direct = counterMap.get(`${objectName}|${instance}|${counterName}`);
+
+            if (direct) {
+              return direct;
+            }
+
+            return counterRows.find(
+              (row) =>
+                row.metricName === counterName &&
+                (row.objectName ?? "").endsWith(objectName) &&
+                ((row.instanceName ?? "") === instance || instance.length === 0),
+            );
+          };
+          const getRateCounter = (
+            objectName: string,
+            counterName: string,
+            instance = "",
+          ) => {
+            const sampled = rateRows.find(
+              (row) =>
+                row.metricName === counterName &&
+                (row.objectName ?? "").endsWith(objectName) &&
+                ((row.instanceName ?? "") === instance || instance.length === 0),
+            );
+
+            if (sampled) {
+              return sampled;
+            }
+
+            return undefined;
           };
 
           const cpuProcess = getCounter("Process", "Process % Processor Time", "_Total");
@@ -252,24 +350,34 @@ export const createMssqlCollectorAdapter = (
             });
           }
 
-          const batch = getCounter("SQLServer:SQL Statistics", "Batch Requests/sec");
+          const batch = getRateCounter("SQLServer:SQL Statistics", "Batch Requests/sec");
           if (batch) {
             push(SERVER_METRIC_KEYS.batchRequestsPerSec, batch.metricValue, "per_second", {
               rawName: batch.metricName,
+              source: "dm_os_performance_counters_delta",
             });
           }
 
-          const txn = getCounter("SQLServer:Databases", "Transactions/sec");
+          const databaseCounterInstance = context.databaseName ?? "_Total";
+          const txn =
+            getRateCounter("SQLServer:Databases", "Transactions/sec", databaseCounterInstance) ??
+            getRateCounter("SQLServer:Databases", "Transactions/sec", "_Total") ??
+            getRateCounter("SQLServer:Databases", "Transactions/sec");
           if (txn) {
             push(SERVER_METRIC_KEYS.transactionsPerSec, txn.metricValue, "per_second", {
               rawName: txn.metricName,
+              source: "dm_os_performance_counters_delta",
             });
           }
 
-          const logFlush = getCounter("SQLServer:Databases", "Log Flushes/sec");
+          const logFlush =
+            getRateCounter("SQLServer:Databases", "Log Flushes/sec", databaseCounterInstance) ??
+            getRateCounter("SQLServer:Databases", "Log Flushes/sec", "_Total") ??
+            getRateCounter("SQLServer:Databases", "Log Flushes/sec");
           if (logFlush) {
             push(SERVER_METRIC_KEYS.logFlushesPerSec, logFlush.metricValue, "per_second", {
               rawName: logFlush.metricName,
+              source: "dm_os_performance_counters_delta",
             });
           }
 
@@ -285,6 +393,39 @@ export const createMssqlCollectorAdapter = (
             push(SERVER_METRIC_KEYS.processesBlocked, blocked.metricValue, "count", {
               rawName: blocked.metricName,
             });
+          }
+        }
+
+        const ringBufferCpu = await safeQuery("ring_buffer_cpu", async () => {
+          const result = await connection.request().query<CpuRingBufferRow>(`
+            SELECT TOP (1)
+              record.value('(./Record/SchedulerMonitorEvent/SystemHealth/ProcessUtilization)[1]', 'int') AS sqlProcessCpuPercent,
+              record.value('(./Record/SchedulerMonitorEvent/SystemHealth/SystemIdle)[1]', 'int') AS systemIdlePercent
+            FROM (
+              SELECT CONVERT(xml, record) AS record, [timestamp]
+              FROM sys.dm_os_ring_buffers
+              WHERE ring_buffer_type = N'RING_BUFFER_SCHEDULER_MONITOR'
+                AND record LIKE '%<SystemHealth>%'
+            ) AS ring_buffer
+            ORDER BY [timestamp] DESC;
+          `);
+          return result.recordset[0] ?? null;
+        });
+
+        if (!hasMetric(SERVER_METRIC_KEYS.cpuUsedPercent) && ringBufferCpu) {
+          const cpuPercent =
+            ringBufferCpu.sqlProcessCpuPercent ??
+            (ringBufferCpu.systemIdlePercent !== null
+              ? 100 - ringBufferCpu.systemIdlePercent
+              : null);
+
+          if (cpuPercent !== null && Number.isFinite(cpuPercent)) {
+            push(
+              SERVER_METRIC_KEYS.cpuUsedPercent,
+              Math.min(100, Math.max(0, cpuPercent)),
+              "percent",
+              { source: "sys.dm_os_ring_buffers" },
+            );
           }
         }
 
@@ -330,7 +471,11 @@ export const createMssqlCollectorAdapter = (
           return result.recordset[0] ?? null;
         });
 
-        if (sqlMemoryRow && metrics.every((m) => m.metricName !== SERVER_METRIC_KEYS.memoryUsedPercent)) {
+        if (
+          sqlMemoryRow &&
+          metrics.every((m) => m.metricName !== SERVER_METRIC_KEYS.memoryUsedPercent) &&
+          Number.isFinite(sqlMemoryRow.memoryUtilizationPercentage)
+        ) {
           push(
             SERVER_METRIC_KEYS.memoryUsedPercent,
             sqlMemoryRow.memoryUtilizationPercentage,
@@ -452,6 +597,210 @@ export const createMssqlCollectorAdapter = (
           });
         }
 
+        const sessionAggRow = await safeQuery("session_aggregate", async () => {
+          const result = await connection.request().query<{
+            totalSessions: number;
+            activeSessions: number;
+            idleSessions: number;
+            runningSqlSessions: number;
+          }>(`
+            SELECT
+              COUNT(*) AS totalSessions,
+              SUM(CASE WHEN s.status = 'running' THEN 1 ELSE 0 END) AS activeSessions,
+              SUM(CASE WHEN s.status = 'sleeping' THEN 1 ELSE 0 END) AS idleSessions,
+              SUM(
+                CASE
+                  WHEN r.session_id IS NOT NULL
+                    AND r.status = 'running'
+                    AND ISNULL(r.command, '') NOT IN ('AWAIT COMMAND', 'CONNECT', 'KILLED')
+                  THEN 1
+                  ELSE 0
+                END
+              ) AS runningSqlSessions
+            FROM sys.dm_exec_sessions s
+            LEFT JOIN sys.dm_exec_requests r
+              ON s.session_id = r.session_id
+            WHERE s.is_user_process = 1
+              AND s.session_id > 50;
+          `);
+          return result.recordset[0] ?? null;
+        });
+
+        if (sessionAggRow) {
+          push(
+            SERVER_METRIC_KEYS.sessionTotalCount,
+            sessionAggRow.totalSessions,
+            "count",
+            { source: "dm_exec_sessions" },
+          );
+          push(
+            SERVER_METRIC_KEYS.sessionActiveCount,
+            sessionAggRow.activeSessions,
+            "count",
+            { source: "dm_exec_sessions" },
+          );
+          push(
+            SERVER_METRIC_KEYS.sessionIdleCount,
+            sessionAggRow.idleSessions,
+            "count",
+            { source: "dm_exec_sessions" },
+          );
+          push(
+            SERVER_METRIC_KEYS.sessionRunningSqlCount,
+            sessionAggRow.runningSqlSessions,
+            "count",
+            { source: "dm_exec_sessions" },
+          );
+        }
+
+        const filegroupRows = await safeQuery("filegroup_usage", async () => {
+          const result = await connection.request().query<{
+            filegroupName: string;
+            typeDesc: string;
+            sizeMb: number;
+            usedMb: number;
+          }>(`
+            SELECT
+              fg.name AS filegroupName,
+              'ROWS' AS typeDesc,
+              CAST(SUM(f.size * 8.0 / 1024) AS float) AS sizeMb,
+              CAST(
+                SUM(COALESCE(CAST(FILEPROPERTY(f.name, 'SpaceUsed') AS bigint), 0) * 8.0 / 1024)
+                AS float
+              ) AS usedMb
+            FROM sys.filegroups fg
+            INNER JOIN sys.database_files f
+              ON fg.data_space_id = f.data_space_id
+            WHERE f.type_desc = 'ROWS'
+            GROUP BY fg.name;
+          `);
+          return result.recordset;
+        });
+
+        if (filegroupRows) {
+          for (const row of filegroupRows) {
+            const usedPercent =
+              row.sizeMb > 0 ? (row.usedMb / row.sizeMb) * 100 : 0;
+            const freeMb = Math.max(row.sizeMb - row.usedMb, 0);
+            const tags = {
+              filegroupName: row.filegroupName,
+              typeDesc: row.typeDesc,
+            };
+            push(SERVER_METRIC_KEYS.filegroupSizeMb, row.sizeMb, "mb", tags);
+            push(SERVER_METRIC_KEYS.filegroupUsedMb, row.usedMb, "mb", tags);
+            push(SERVER_METRIC_KEYS.filegroupFreeMb, freeMb, "mb", tags);
+            push(
+              SERVER_METRIC_KEYS.filegroupUsedPercent,
+              usedPercent,
+              "percent",
+              tags,
+            );
+          }
+        }
+
+        const dataFileRows = await safeQuery("datafile_usage", async () => {
+          const result = await connection.request().query<{
+            fileName: string;
+            filegroupName: string;
+            typeDesc: string;
+            sizeMb: number;
+            usedMb: number;
+          }>(`
+            SELECT
+              f.name AS fileName,
+              COALESCE(fg.name, 'LOG') AS filegroupName,
+              f.type_desc AS typeDesc,
+              CAST(f.size * 8.0 / 1024 AS float) AS sizeMb,
+              CAST(
+                COALESCE(CAST(FILEPROPERTY(f.name, 'SpaceUsed') AS bigint), 0) * 8.0 / 1024
+                AS float
+              ) AS usedMb
+            FROM sys.database_files f
+            LEFT JOIN sys.filegroups fg
+              ON f.data_space_id = fg.data_space_id;
+          `);
+          return result.recordset;
+        });
+
+        if (dataFileRows) {
+          for (const row of dataFileRows) {
+            const usedPercent =
+              row.sizeMb > 0 ? (row.usedMb / row.sizeMb) * 100 : 0;
+            const freeMb = Math.max(row.sizeMb - row.usedMb, 0);
+            const tags = {
+              fileName: row.fileName,
+              filegroupName: row.filegroupName,
+              typeDesc: row.typeDesc,
+            };
+            push(SERVER_METRIC_KEYS.dataFileSizeMb, row.sizeMb, "mb", tags);
+            push(SERVER_METRIC_KEYS.dataFileUsedMb, row.usedMb, "mb", tags);
+            push(SERVER_METRIC_KEYS.dataFileFreeMb, freeMb, "mb", tags);
+            push(
+              SERVER_METRIC_KEYS.dataFileUsedPercent,
+              usedPercent,
+              "percent",
+              tags,
+            );
+          }
+        }
+
+        const tableSizeRows = await safeQuery("table_sizes", async () => {
+          const result = await connection.request().query<{
+            schemaName: string;
+            tableName: string;
+            rowCount: number;
+            dataMb: number;
+            indexMb: number;
+          }>(`
+            SELECT TOP (30)
+              s.name AS schemaName,
+              t.name AS tableName,
+              CAST(SUM(CASE WHEN ps.index_id < 2 THEN ps.row_count ELSE 0 END) AS float) AS [rowCount],
+              CAST(
+                8 * SUM(
+                  CASE
+                    WHEN ps.index_id < 2 THEN
+                      ps.in_row_data_page_count +
+                      ps.lob_used_page_count +
+                      ps.row_overflow_used_page_count
+                    ELSE 0
+                  END
+                ) / 1024.0
+                AS float
+              ) AS dataMb,
+              CAST(
+                8 * SUM(CASE WHEN ps.index_id > 1 THEN ps.used_page_count ELSE 0 END) / 1024.0
+                AS float
+              ) AS indexMb
+            FROM sys.tables t
+            INNER JOIN sys.schemas s
+              ON t.schema_id = s.schema_id
+            INNER JOIN sys.dm_db_partition_stats ps
+              ON t.object_id = ps.object_id
+            WHERE t.is_ms_shipped = 0
+              AND t.type = 'U'
+            GROUP BY s.name, t.name
+            ORDER BY SUM(ps.used_page_count) DESC;
+          `);
+          return result.recordset;
+        });
+
+        if (tableSizeRows) {
+          for (const row of tableSizeRows) {
+            const tableKey = `${row.schemaName}.${row.tableName}`;
+            const totalMb = row.dataMb + row.indexMb;
+            const tags = {
+              tableKey,
+              schemaName: row.schemaName,
+              tableName: row.tableName,
+            };
+            push(SERVER_METRIC_KEYS.tableDataMb, row.dataMb, "mb", tags);
+            push(SERVER_METRIC_KEYS.tableIndexMb, row.indexMb, "mb", tags);
+            push(SERVER_METRIC_KEYS.tableTotalMb, totalMb, "mb", tags);
+            push(SERVER_METRIC_KEYS.tableRowCount, row.rowCount, "count", tags);
+          }
+        }
+
         return metrics;
       });
     },
@@ -466,13 +815,20 @@ export const createMssqlCollectorAdapter = (
             r.wait_type AS waitType,
             r.wait_time AS waitMs,
             CONVERT(varchar(64), r.query_hash, 2) AS sqlId,
+            NULLIF(r.blocking_session_id, 0) AS blockingSessionId,
+            r.command AS command,
+            r.cpu_time AS cpuTimeMs,
+            r.logical_reads AS logicalReads,
+            st.text AS sqlTextMasked,
             s.host_name AS hostName,
             s.program_name AS programName,
             DB_NAME(COALESCE(r.database_id, s.database_id)) AS databaseName
           FROM sys.dm_exec_sessions s
           LEFT JOIN sys.dm_exec_requests r
             ON s.session_id = r.session_id
+          OUTER APPLY sys.dm_exec_sql_text(r.sql_handle) st
           WHERE s.is_user_process = 1
+            AND s.session_id > 50
           ORDER BY COALESCE(r.cpu_time, 0) DESC, s.session_id;
         `);
 
@@ -487,6 +843,12 @@ export const createMssqlCollectorAdapter = (
         waitType: row.waitType,
         waitMs: row.waitMs,
         sqlId: row.sqlId,
+        blockingSessionId:
+          row.blockingSessionId !== null ? String(row.blockingSessionId) : null,
+        command: row.command,
+        cpuTimeMs: row.cpuTimeMs,
+        logicalReads: row.logicalReads,
+        sqlTextMasked: maskSqlText(row.sqlTextMasked),
         hostName: row.hostName,
         programName: row.programName,
         databaseName: row.databaseName,

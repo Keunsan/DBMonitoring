@@ -10,9 +10,9 @@ export const dynamic = "force-dynamic";
 /**
  * DB 인스턴스별 최신 수집 요약을 반환합니다.
  */
-export const GET = withApiHandler(() => ({
+export const GET = withApiHandler(async () => ({
   data: {
-    items: listDbInstances().map((instance) => ({
+    items: (await listDbInstances()).map((instance) => ({
       instance,
       summary: getMonitoringSummary(instance.id),
     })),

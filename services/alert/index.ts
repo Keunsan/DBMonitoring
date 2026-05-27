@@ -129,9 +129,9 @@ const getState = (): AlertState => {
   return globalState.__dbMonitoringAlertState;
 };
 
-const assertScopeExists = (input: ThresholdPolicyInput) => {
+const assertScopeExists = async (input: ThresholdPolicyInput) => {
   if (input.scopeType === "BUSINESS_SYSTEM") {
-    const exists = listBusinessSystems().some((system) => system.id === input.scopeId);
+    const exists = (await listBusinessSystems()).some((system) => system.id === input.scopeId);
 
     if (!exists) {
       throw new Error("업무 시스템을 찾을 수 없습니다.");
@@ -139,7 +139,7 @@ const assertScopeExists = (input: ThresholdPolicyInput) => {
   }
 
   if (input.scopeType === "DB_INSTANCE") {
-    const exists = listDbInstances().some((instance) => instance.id === input.scopeId);
+    const exists = (await listDbInstances()).some((instance) => instance.id === input.scopeId);
 
     if (!exists) {
       throw new Error("DB 인스턴스를 찾을 수 없습니다.");
@@ -180,10 +180,10 @@ const getPolicyScopeRank = (policy: ThresholdPolicy) => {
   return 1;
 };
 
-const resolvePoliciesForInstance = (
+const resolvePoliciesForInstance = async (
   dbInstanceId: DbInstanceId,
-): ThresholdPolicy[] => {
-  const instance = listDbInstances().find((item) => item.id === dbInstanceId);
+): Promise<ThresholdPolicy[]> => {
+  const instance = (await listDbInstances()).find((item) => item.id === dbInstanceId);
 
   if (!instance) {
     return [];
@@ -220,8 +220,8 @@ const getLatestMetricValue = (
   metricName: string,
 ) => listMetricHistory({ dbInstanceId, metricName, limit: 1 })[0]?.metricValue ?? null;
 
-const getPolicyValue = (dbInstanceId: DbInstanceId, metricKey: ThresholdMetricKey) => {
-  const instance = listDbInstances().find((item) => item.id === dbInstanceId);
+const getPolicyValue = async (dbInstanceId: DbInstanceId, metricKey: ThresholdMetricKey) => {
+  const instance = (await listDbInstances()).find((item) => item.id === dbInstanceId);
   const lastRun = listCollectionRuns(dbInstanceId)[0];
 
   switch (metricKey) {
@@ -305,8 +305,8 @@ export const listThresholdPolicies = () => getState().policies;
 /**
  * 새 임계치 정책을 등록합니다.
  */
-export const createThresholdPolicy = (input: ThresholdPolicyInput) => {
-  assertScopeExists(input);
+export const createThresholdPolicy = async (input: ThresholdPolicyInput) => {
+  await assertScopeExists(input);
 
   const createdAt = now();
   const policy: ThresholdPolicy = {
@@ -328,7 +328,14 @@ export const updateThresholdPolicy = (
   id: string,
   input: ThresholdPolicyInput,
 ) => {
-  assertScopeExists(input);
+  return updateThresholdPolicyAsync(id, input);
+};
+
+export const updateThresholdPolicyAsync = async (
+  id: string,
+  input: ThresholdPolicyInput,
+) => {
+  await assertScopeExists(input);
 
   const state = getState();
   const index = state.policies.findIndex((policy) => policy.id === id);
@@ -370,9 +377,9 @@ export const evaluateAlertPolicies = async (): Promise<AlertEvaluationResult> =>
   const events: AlertEvent[] = [];
   let suppressed = 0;
 
-  for (const instance of listDbInstances().filter((item) => item.isActive)) {
-    for (const policy of resolvePoliciesForInstance(instance.id)) {
-      const value = getPolicyValue(instance.id, policy.metricKey);
+  for (const instance of (await listDbInstances()).filter((item) => item.isActive)) {
+    for (const policy of await resolvePoliciesForInstance(instance.id)) {
+      const value = await getPolicyValue(instance.id, policy.metricKey);
 
       if (value === null) {
         continue;
@@ -435,10 +442,10 @@ export const acknowledgeAlertEvent = (id: string, acknowledgedBy = "local-user")
 /**
  * 특정 DB 인스턴스의 정책 테스트 결과를 반환합니다.
  */
-export const testThresholdPolicies = (dbInstanceId: DbInstanceId) =>
-  resolvePoliciesForInstance(dbInstanceId)
-    .map((policy) => {
-      const value = getPolicyValue(dbInstanceId, policy.metricKey);
+export const testThresholdPolicies = async (dbInstanceId: DbInstanceId) => {
+  const results = await Promise.all(
+    (await resolvePoliciesForInstance(dbInstanceId)).map(async (policy) => {
+      const value = await getPolicyValue(dbInstanceId, policy.metricKey);
       const severity = value === null ? null : getSeverity(policy, value);
 
       return {
@@ -447,5 +454,8 @@ export const testThresholdPolicies = (dbInstanceId: DbInstanceId) =>
         severity,
         breached: severity !== null,
       };
-    })
-    .filter((result) => result.value !== null);
+    }),
+  );
+
+  return results.filter((result) => result.value !== null);
+};

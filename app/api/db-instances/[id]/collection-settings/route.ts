@@ -23,8 +23,8 @@ type RouteContext = {
 export const GET = async (request: Request, { params }: RouteContext) => {
   const { id } = await params;
 
-  return withApiHandler(() => {
-    const instance = getDbInstance(id);
+  return withApiHandler(async () => {
+    const instance = await getDbInstance(id);
 
     return {
       data: {
@@ -49,7 +49,7 @@ export const PATCH = async (request: Request, { params }: RouteContext) => {
     const payload = await readJsonObject(apiRequest);
 
     return {
-      data: updateCollectionSettings(
+      data: await updateCollectionSettings(
         id,
         parseCollectionSettingsInput(payload),
       ),

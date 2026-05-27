@@ -59,6 +59,11 @@ export type SessionPayload = {
   waitType: string | null;
   waitMs: number | null;
   sqlId: string | null;
+  blockingSessionId?: string | null;
+  command?: string | null;
+  cpuTimeMs?: number | null;
+  logicalReads?: number | null;
+  sqlTextMasked?: string | null;
   hostName?: string | null;
   programName?: string | null;
   databaseName?: string | null;

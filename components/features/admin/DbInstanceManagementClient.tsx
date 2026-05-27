@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/layout";
 import { EmptyState, ErrorState, LoadingSkeleton, StatusBadge } from "@/components/shared";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,8 +15,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import {
   Table,
   TableBody,
@@ -55,7 +58,6 @@ type DbInstanceForm = {
   collectIntervalSec: string;
   sqlAggregateIntervalSec: string;
   isActive: boolean;
-  connectionSecretRef: string;
 };
 
 type ConnectionSecretForm = {
@@ -65,6 +67,12 @@ type ConnectionSecretForm = {
   trustServerCertificate: boolean;
   connectString: string;
   serviceName: string;
+};
+
+type RegistrationConnectionTestState = {
+  status: "idle" | "testing" | "success" | "fail";
+  key: string | null;
+  message: string | null;
 };
 
 type DbInstanceManagementClientProps = {
@@ -95,7 +103,6 @@ const defaultDbInstanceForm: DbInstanceForm = {
   collectIntervalSec: "30",
   sqlAggregateIntervalSec: "300",
   isActive: true,
-  connectionSecretRef: "env:ERP_TEST_DB",
 };
 
 const defaultConnectionSecretForm: ConnectionSecretForm = {
@@ -106,6 +113,44 @@ const defaultConnectionSecretForm: ConnectionSecretForm = {
   connectString: "",
   serviceName: "",
 };
+
+const defaultRegistrationTestState: RegistrationConnectionTestState = {
+  status: "idle",
+  key: null,
+  message: null,
+};
+
+const toBusinessSystemForm = (system: BusinessSystem): BusinessSystemForm => ({
+  code: system.code,
+  name: system.name,
+  importance: system.importance,
+  ownerDept: system.ownerDept ?? "",
+  ownerName: system.ownerName ?? "",
+  ownerEmail: system.ownerEmail ?? "",
+});
+
+const toDbInstanceForm = (instance: DbInstance): DbInstanceForm => ({
+  dbmsType: instance.dbmsType,
+  instanceName: instance.instanceName,
+  host: instance.host,
+  port: String(instance.port),
+  databaseName: instance.databaseName ?? "",
+  businessSystemId: instance.businessSystemId,
+  importance: instance.importance,
+  envType: instance.envType,
+  collectorType: instance.collectorType,
+  collectorId: instance.collectorId ?? "",
+  collectIntervalSec: String(instance.collectIntervalSec),
+  sqlAggregateIntervalSec: String(instance.sqlAggregateIntervalSec),
+  isActive: instance.isActive,
+});
+
+const toDbInstancePayload = (form: DbInstanceForm) => ({
+  ...form,
+  port: Number(form.port),
+  collectIntervalSec: Number(form.collectIntervalSec),
+  sqlAggregateIntervalSec: Number(form.sqlAggregateIntervalSec),
+});
 
 const toErrorMessage = async (response: Response) => {
   const payload = (await response.json().catch(() => null)) as ApiResponse<unknown> | null;
@@ -140,31 +185,59 @@ const SelectField = ({
   value,
   options,
   onChange,
+  placeholder,
 }: {
   id: string;
   label: string;
   value: string;
   options: { label: string; value: string }[];
   onChange: (value: string) => void;
+  placeholder?: string;
 }) => {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <select
+      <NativeSelect
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="border-input bg-background h-8 w-full rounded-lg border px-2.5 text-sm"
+        className="w-full"
       >
+        {placeholder ? (
+          <NativeSelectOption value="" disabled>
+            {placeholder}
+          </NativeSelectOption>
+        ) : null}
         {options.map((option) => (
-          <option key={option.value} value={option.value}>
+          <NativeSelectOption key={option.value} value={option.value}>
             {option.label}
-          </option>
+          </NativeSelectOption>
         ))}
-      </select>
+      </NativeSelect>
     </div>
   );
 };
+
+const CheckboxField = ({
+  id,
+  label,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) => (
+  <div className="flex items-center gap-2">
+    <Checkbox
+      id={id}
+      checked={checked}
+      onCheckedChange={(value) => onChange(value === true)}
+    />
+    <Label htmlFor={id}>{label}</Label>
+  </div>
+);
 
 /**
  * 업무 시스템과 DB 인스턴스 등록, 수집 설정, 연결 테스트를 제공합니다.
@@ -178,11 +251,25 @@ export const DbInstanceManagementClient = ({
   );
   const [dbInstances, setDbInstances] = useState<DbInstance[]>(initialDbInstances);
   const [businessForm, setBusinessForm] = useState(defaultBusinessSystemForm);
-  const [dbForm, setDbForm] = useState(defaultDbInstanceForm);
+  const [editingBusinessSystemId, setEditingBusinessSystemId] = useState<string | null>(
+    null,
+  );
+  const [businessEditForm, setBusinessEditForm] =
+    useState<BusinessSystemForm>(defaultBusinessSystemForm);
+  const [dbForm, setDbForm] = useState<DbInstanceForm>(() => ({
+    ...defaultDbInstanceForm,
+    businessSystemId: initialBusinessSystems[0]?.id ?? "",
+  }));
+  const [editingDbInstanceId, setEditingDbInstanceId] = useState<string | null>(null);
+  const [dbEditForm, setDbEditForm] = useState<DbInstanceForm>(defaultDbInstanceForm);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [registrationSecretForm, setRegistrationSecretForm] =
+    useState<ConnectionSecretForm>(defaultConnectionSecretForm);
+  const [registrationTest, setRegistrationTest] =
+    useState<RegistrationConnectionTestState>(defaultRegistrationTestState);
   const [secretTargetId, setSecretTargetId] = useState<string | null>(null);
   const [secretForm, setSecretForm] = useState<ConnectionSecretForm>(
     defaultConnectionSecretForm,
@@ -198,6 +285,56 @@ export const DbInstanceManagementClient = ({
     [businessSystems],
   );
 
+  const dbInstancePayload = useMemo(
+    () => toDbInstancePayload(dbForm),
+    [dbForm],
+  );
+
+  const registrationCredentialPayload = useMemo(
+    () => ({
+      username: registrationSecretForm.username,
+      password: registrationSecretForm.password,
+      encrypt: registrationSecretForm.encrypt,
+      trustServerCertificate: registrationSecretForm.trustServerCertificate,
+      connectString:
+        dbForm.dbmsType === "ORACLE" ? registrationSecretForm.connectString : undefined,
+      serviceName:
+        dbForm.dbmsType === "ORACLE"
+          ? registrationSecretForm.serviceName || dbForm.databaseName
+          : undefined,
+    }),
+    [dbForm.databaseName, dbForm.dbmsType, registrationSecretForm],
+  );
+
+  const registrationTestKey = useMemo(
+    () =>
+      JSON.stringify({
+        instance: dbInstancePayload,
+        credential: registrationCredentialPayload,
+      }),
+    [dbInstancePayload, registrationCredentialPayload],
+  );
+
+  const hasRequiredDbInstanceFields = Boolean(
+    dbForm.businessSystemId &&
+      dbForm.instanceName.trim() &&
+      dbForm.host.trim() &&
+      dbForm.port.trim() &&
+      registrationSecretForm.username.trim() &&
+      registrationSecretForm.password.trim(),
+  );
+  const hasRequiredOracleConnectInfo =
+    dbForm.dbmsType !== "ORACLE" ||
+    Boolean(registrationSecretForm.connectString.trim() || dbForm.databaseName.trim());
+  const canTestDbInstance =
+    hasRequiredDbInstanceFields && hasRequiredOracleConnectInfo;
+  const hasSuccessfulCurrentRegistrationTest =
+    registrationTest.status === "success" && registrationTest.key === registrationTestKey;
+  const registrationTestNeedsRefresh =
+    registrationTest.status === "success" && registrationTest.key !== registrationTestKey;
+  const canSubmitDbInstance =
+    canTestDbInstance && hasSuccessfulCurrentRegistrationTest;
+
   const refresh = async () => {
     setLoading(true);
     setError(null);
@@ -208,7 +345,11 @@ export const DbInstanceManagementClient = ({
       setDbInstances(payload.items);
       setDbForm((current) => ({
         ...current,
-        businessSystemId: current.businessSystemId || payload.businessSystems[0]?.id || "",
+        businessSystemId: payload.businessSystems.some(
+          (system) => system.id === current.businessSystemId,
+        )
+          ? current.businessSystemId
+          : payload.businessSystems[0]?.id || "",
       }));
     } catch (refreshError) {
       setError(
@@ -243,25 +384,91 @@ export const DbInstanceManagementClient = ({
     }
   };
 
+  const startBusinessSystemEdit = (system: BusinessSystem) => {
+    setEditingBusinessSystemId(system.id);
+    setBusinessEditForm(toBusinessSystemForm(system));
+    setMessage(null);
+    setError(null);
+  };
+
+  const submitBusinessSystemEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editingBusinessSystemId) {
+      return;
+    }
+
+    setMessage(null);
+    setError(null);
+
+    try {
+      await requestJson<BusinessSystem>(`/api/business-systems/${editingBusinessSystemId}`, {
+        method: "PATCH",
+        body: JSON.stringify(businessEditForm),
+      });
+      setEditingBusinessSystemId(null);
+      setBusinessEditForm(defaultBusinessSystemForm);
+      setMessage("업무 시스템 정보를 수정했습니다.");
+      await refresh();
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "업무 시스템 수정에 실패했습니다.",
+      );
+    }
+  };
+
+  const deleteBusinessSystemById = async (id: string) => {
+    setMessage(null);
+    setError(null);
+
+    try {
+      await requestJson(`/api/business-systems/${id}`, { method: "DELETE" });
+      if (editingBusinessSystemId === id) {
+        setEditingBusinessSystemId(null);
+        setBusinessEditForm(defaultBusinessSystemForm);
+      }
+      setMessage("업무 시스템을 삭제했습니다.");
+      await refresh();
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "업무 시스템 삭제에 실패했습니다.",
+      );
+    }
+  };
+
   const submitDbInstance = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setMessage(null);
     setError(null);
 
+    if (!canSubmitDbInstance) {
+      setError("DB 연결 테스트에 성공한 후 DB 인스턴스를 등록할 수 있습니다.");
+      return;
+    }
+
     try {
-      await requestJson<DbInstance>("/api/db-instances", {
+      const instance = await requestJson<DbInstance>("/api/db-instances", {
         method: "POST",
-        body: JSON.stringify({
-          ...dbForm,
-          port: Number(dbForm.port),
-          collectIntervalSec: Number(dbForm.collectIntervalSec),
-          sqlAggregateIntervalSec: Number(dbForm.sqlAggregateIntervalSec),
-        }),
+        body: JSON.stringify(dbInstancePayload),
       });
+
+      await requestJson<{
+        connectionSecretRef: string;
+      }>(`/api/db-instances/${instance.id}/connection-secret`, {
+        method: "POST",
+        body: JSON.stringify(registrationCredentialPayload),
+      });
+
       setDbForm((current) => ({
         ...defaultDbInstanceForm,
         businessSystemId: current.businessSystemId,
       }));
+      setRegistrationSecretForm(defaultConnectionSecretForm);
+      setRegistrationTest(defaultRegistrationTestState);
       setMessage("DB 인스턴스를 등록했습니다.");
       await refresh();
     } catch (submitError) {
@@ -269,6 +476,104 @@ export const DbInstanceManagementClient = ({
         submitError instanceof Error
           ? submitError.message
           : "DB 인스턴스 등록에 실패했습니다.",
+      );
+    }
+  };
+
+  const testRegistrationConnection = async () => {
+    setMessage(null);
+    setError(null);
+    setRegistrationTest({
+      status: "testing",
+      key: registrationTestKey,
+      message: "DB 연결 테스트를 진행 중입니다.",
+    });
+
+    try {
+      const result = await requestJson<{
+        latencyMs: number | null;
+        message: string;
+      }>("/api/db-instances/test-connection", {
+        method: "POST",
+        body: JSON.stringify({
+          instance: dbInstancePayload,
+          credential: registrationCredentialPayload,
+        }),
+      });
+
+      setRegistrationTest({
+        status: "success",
+        key: registrationTestKey,
+        message: `${result.message} 지연시간: ${result.latencyMs ?? "-"}ms`,
+      });
+      setMessage("등록 전 DB 연결 테스트에 성공했습니다.");
+    } catch (testError) {
+      const testMessage =
+        testError instanceof Error
+          ? testError.message
+          : "등록 전 DB 연결 테스트에 실패했습니다.";
+
+      setRegistrationTest({
+        status: "fail",
+        key: registrationTestKey,
+        message: testMessage,
+      });
+      setError(testMessage);
+    }
+  };
+
+  const startDbInstanceEdit = (instance: DbInstance) => {
+    setEditingDbInstanceId(instance.id);
+    setDbEditForm(toDbInstanceForm(instance));
+    setMessage(null);
+    setError(null);
+  };
+
+  const submitDbInstanceEdit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!editingDbInstanceId) {
+      return;
+    }
+
+    setMessage(null);
+    setError(null);
+
+    try {
+      await requestJson<DbInstance>(`/api/db-instances/${editingDbInstanceId}`, {
+        method: "PATCH",
+        body: JSON.stringify(toDbInstancePayload(dbEditForm)),
+      });
+      setEditingDbInstanceId(null);
+      setDbEditForm(defaultDbInstanceForm);
+      setMessage("DB 인스턴스 정보를 수정했습니다.");
+      await refresh();
+    } catch (updateError) {
+      setError(
+        updateError instanceof Error
+          ? updateError.message
+          : "DB 인스턴스 수정에 실패했습니다.",
+      );
+    }
+  };
+
+  const deleteDbInstanceById = async (id: string) => {
+    setMessage(null);
+    setError(null);
+
+    try {
+      await requestJson(`/api/db-instances/${id}`, { method: "DELETE" });
+      if (editingDbInstanceId === id) {
+        setEditingDbInstanceId(null);
+        setDbEditForm(defaultDbInstanceForm);
+      }
+      setMessage("DB 인스턴스를 삭제했습니다.");
+      await refresh();
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "DB 인스턴스 삭제에 실패했습니다.",
       );
     }
   };
@@ -386,17 +691,17 @@ export const DbInstanceManagementClient = ({
   };
 
   return (
-    <main className="flex flex-1 flex-col">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <PageHeader
         title="DB 인스턴스 관리"
         description="업무 시스템, DB 인스턴스, 수집 설정과 연결 테스트를 관리합니다."
         actions={<Button onClick={() => void refresh()}>새로고침</Button>}
       />
-      <div className="space-y-4 p-6">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {message ? (
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {message}
-          </div>
+          <Alert className="border-emerald-200 bg-emerald-50 text-emerald-700">
+            <AlertDescription className="text-emerald-700">{message}</AlertDescription>
+          </Alert>
         ) : null}
         {error ? (
           <ErrorState
@@ -405,7 +710,7 @@ export const DbInstanceManagementClient = ({
             onRetry={() => void refresh()}
           />
         ) : null}
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid gap-3 xl:grid-cols-2">
           <Card>
             <CardHeader>
               <CardTitle>업무 시스템 등록</CardTitle>
@@ -507,7 +812,7 @@ export const DbInstanceManagementClient = ({
             <CardHeader>
               <CardTitle>DB 인스턴스 등록</CardTitle>
               <CardDescription>
-                접속 정보는 secret ref만 저장하고 실제 비밀번호는 저장하지 않습니다.
+                Secret Ref는 자동 생성되며 실제 비밀번호는 Vault에만 저장합니다.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -520,6 +825,11 @@ export const DbInstanceManagementClient = ({
                     setDbForm((current) => ({ ...current, businessSystemId }))
                   }
                   options={businessSystemOptions}
+                  placeholder={
+                    businessSystemOptions.length === 0
+                      ? "먼저 업무 시스템을 등록해주세요"
+                      : "업무 시스템을 선택해주세요"
+                  }
                 />
                 <SelectField
                   id="db-dbms"
@@ -596,20 +906,6 @@ export const DbInstanceManagementClient = ({
                   ]}
                 />
                 <div className="space-y-1.5">
-                  <Label htmlFor="secret-ref">Secret Ref</Label>
-                  <Input
-                    id="secret-ref"
-                    value={dbForm.connectionSecretRef}
-                    onChange={(event) =>
-                      setDbForm((current) => ({
-                        ...current,
-                        connectionSecretRef: event.target.value,
-                      }))
-                    }
-                    placeholder="env:ERP_TEST_DB 또는 vault:dbmonitoring/instances/{id}"
-                  />
-                </div>
-                <div className="space-y-1.5">
                   <Label htmlFor="collector-id">Collector ID</Label>
                   <Input
                     id="collector-id"
@@ -643,7 +939,7 @@ export const DbInstanceManagementClient = ({
                   <Input
                     id="sql-interval"
                     type="number"
-                    min={60}
+                    min={10}
                     max={300}
                     value={dbForm.sqlAggregateIntervalSec}
                     onChange={(event) =>
@@ -654,29 +950,283 @@ export const DbInstanceManagementClient = ({
                     }
                   />
                 </div>
-                <div className="flex items-center gap-2 pt-6">
-                  <input
+                <div className="pt-6">
+                  <CheckboxField
                     id="is-active"
-                    type="checkbox"
+                    label="수집 활성화"
                     checked={dbForm.isActive}
-                    onChange={(event) =>
+                    onChange={(isActive) =>
                       setDbForm((current) => ({
                         ...current,
-                        isActive: event.target.checked,
+                        isActive,
                       }))
                     }
                   />
-                  <Label htmlFor="is-active">수집 활성화</Label>
                 </div>
-                <div className="md:col-span-2">
-                  <Button type="submit" disabled={!dbForm.businessSystemId}>
-                    DB 인스턴스 등록
-                  </Button>
+                <div className="space-y-1.5">
+                  <Label htmlFor="registration-secret-username">DB 사용자</Label>
+                  <Input
+                    id="registration-secret-username"
+                    value={registrationSecretForm.username}
+                    onChange={(event) =>
+                      setRegistrationSecretForm((current) => ({
+                        ...current,
+                        username: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="registration-secret-password">DB 비밀번호</Label>
+                  <Input
+                    id="registration-secret-password"
+                    type="password"
+                    autoComplete="new-password"
+                    value={registrationSecretForm.password}
+                    onChange={(event) =>
+                      setRegistrationSecretForm((current) => ({
+                        ...current,
+                        password: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                {dbForm.dbmsType === "ORACLE" ? (
+                  <>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <Label htmlFor="registration-secret-connect-string">
+                        Oracle Connect String
+                      </Label>
+                      <Input
+                        id="registration-secret-connect-string"
+                        value={registrationSecretForm.connectString}
+                        onChange={(event) =>
+                          setRegistrationSecretForm((current) => ({
+                            ...current,
+                            connectString: event.target.value,
+                          }))
+                        }
+                        placeholder="host:1521/service"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <CheckboxField
+                      id="registration-secret-encrypt"
+                      label="TLS encrypt"
+                      checked={registrationSecretForm.encrypt}
+                      onChange={(encrypt) =>
+                        setRegistrationSecretForm((current) => ({
+                          ...current,
+                          encrypt,
+                        }))
+                      }
+                    />
+                    <CheckboxField
+                      id="registration-secret-trust-cert"
+                      label="인증서 신뢰"
+                      checked={registrationSecretForm.trustServerCertificate}
+                      onChange={(trustServerCertificate) =>
+                        setRegistrationSecretForm((current) => ({
+                          ...current,
+                          trustServerCertificate,
+                        }))
+                      }
+                    />
+                  </>
+                )}
+                <div className="md:col-span-2 space-y-2">
+                  {!canTestDbInstance ? (
+                    <p className="text-muted-foreground text-sm">
+                      업무 시스템, 인스턴스명, Host, Port, DB 사용자, 비밀번호를 입력한
+                      뒤 연결 테스트를 진행해주세요.
+                    </p>
+                  ) : null}
+                  {registrationTestNeedsRefresh ? (
+                    <p className="text-amber-700 text-sm">
+                      연결 테스트 이후 입력값이 변경되었습니다. 다시 연결 테스트를
+                      진행해주세요.
+                    </p>
+                  ) : null}
+                  {registrationTest.message ? (
+                    <p
+                      className={
+                        registrationTest.status === "success"
+                          ? "text-emerald-700 text-sm"
+                          : "text-destructive text-sm"
+                      }
+                    >
+                      {registrationTest.message}
+                    </p>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!canTestDbInstance || registrationTest.status === "testing"}
+                      onClick={() => void testRegistrationConnection()}
+                    >
+                      {registrationTest.status === "testing" ? "확인 중" : "연결 테스트"}
+                    </Button>
+                    <Button type="submit" disabled={!canSubmitDbInstance}>
+                      DB 인스턴스 등록
+                    </Button>
+                  </div>
                 </div>
               </form>
             </CardContent>
           </Card>
         </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>업무 시스템 목록</CardTitle>
+            <CardDescription>
+              업무 코드는 Key 값이므로 수정할 수 없고, 나머지 운영 정보만 수정합니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {editingBusinessSystemId ? (
+              <form
+                className="mb-4 grid gap-3 rounded-lg border p-4 md:grid-cols-2"
+                onSubmit={submitBusinessSystemEdit}
+              >
+                <div className="space-y-1.5">
+                  <Label htmlFor="business-edit-code">업무 코드</Label>
+                  <Input id="business-edit-code" value={businessEditForm.code} disabled />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="business-edit-name">업무명</Label>
+                  <Input
+                    id="business-edit-name"
+                    value={businessEditForm.name}
+                    onChange={(event) =>
+                      setBusinessEditForm((current) => ({
+                        ...current,
+                        name: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <SelectField
+                  id="business-edit-importance"
+                  label="중요도"
+                  value={businessEditForm.importance}
+                  onChange={(importance) =>
+                    setBusinessEditForm((current) => ({ ...current, importance }))
+                  }
+                  options={[
+                    { label: "낮음", value: "LOW" },
+                    { label: "보통", value: "MEDIUM" },
+                    { label: "높음", value: "HIGH" },
+                    { label: "중요", value: "CRITICAL" },
+                  ]}
+                />
+                <div className="space-y-1.5">
+                  <Label htmlFor="business-edit-owner-dept">담당 부서</Label>
+                  <Input
+                    id="business-edit-owner-dept"
+                    value={businessEditForm.ownerDept}
+                    onChange={(event) =>
+                      setBusinessEditForm((current) => ({
+                        ...current,
+                        ownerDept: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="business-edit-owner-name">담당자</Label>
+                  <Input
+                    id="business-edit-owner-name"
+                    value={businessEditForm.ownerName}
+                    onChange={(event) =>
+                      setBusinessEditForm((current) => ({
+                        ...current,
+                        ownerName: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="business-edit-owner-email">담당자 이메일</Label>
+                  <Input
+                    id="business-edit-owner-email"
+                    type="email"
+                    value={businessEditForm.ownerEmail}
+                    onChange={(event) =>
+                      setBusinessEditForm((current) => ({
+                        ...current,
+                        ownerEmail: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex gap-2 md:col-span-2">
+                  <Button type="submit">수정 저장</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingBusinessSystemId(null);
+                      setBusinessEditForm(defaultBusinessSystemForm);
+                    }}
+                  >
+                    취소
+                  </Button>
+                </div>
+              </form>
+            ) : null}
+            {businessSystems.length === 0 ? (
+              <EmptyState title="등록된 업무 시스템이 없습니다" />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>업무 코드</TableHead>
+                    <TableHead>업무명</TableHead>
+                    <TableHead>중요도</TableHead>
+                    <TableHead>담당</TableHead>
+                    <TableHead className="text-right">작업</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {businessSystems.map((system) => (
+                    <TableRow key={system.id}>
+                      <TableCell className="font-medium">{system.code}</TableCell>
+                      <TableCell>{system.name}</TableCell>
+                      <TableCell>{system.importance}</TableCell>
+                      <TableCell>
+                        <div>{system.ownerDept ?? "-"}</div>
+                        <div className="text-muted-foreground text-xs">
+                          {system.ownerName ?? "-"} / {system.ownerEmail ?? "-"}
+                        </div>
+                      </TableCell>
+                      <TableCell className="space-x-2 text-right">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => startBusinessSystemEdit(system)}
+                        >
+                          수정
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void deleteBusinessSystemById(system.id)}
+                        >
+                          삭제
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
         {secretTargetId ? (
           <Card>
             <CardHeader>
@@ -756,34 +1306,28 @@ export const DbInstanceManagementClient = ({
                   </>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="secret-encrypt"
-                        type="checkbox"
-                        checked={secretForm.encrypt}
-                        onChange={(event) =>
-                          setSecretForm((current) => ({
-                            ...current,
-                            encrypt: event.target.checked,
-                          }))
-                        }
-                      />
-                      <Label htmlFor="secret-encrypt">TLS encrypt</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="secret-trust-cert"
-                        type="checkbox"
-                        checked={secretForm.trustServerCertificate}
-                        onChange={(event) =>
-                          setSecretForm((current) => ({
-                            ...current,
-                            trustServerCertificate: event.target.checked,
-                          }))
-                        }
-                      />
-                      <Label htmlFor="secret-trust-cert">인증서 신뢰</Label>
-                    </div>
+                    <CheckboxField
+                      id="secret-encrypt"
+                      label="TLS encrypt"
+                      checked={secretForm.encrypt}
+                      onChange={(encrypt) =>
+                        setSecretForm((current) => ({
+                          ...current,
+                          encrypt,
+                        }))
+                      }
+                    />
+                    <CheckboxField
+                      id="secret-trust-cert"
+                      label="인증서 신뢰"
+                      checked={secretForm.trustServerCertificate}
+                      onChange={(trustServerCertificate) =>
+                        setSecretForm((current) => ({
+                          ...current,
+                          trustServerCertificate,
+                        }))
+                      }
+                    />
                   </>
                 )}
                 <div className="flex gap-2 md:col-span-2">
@@ -813,6 +1357,178 @@ export const DbInstanceManagementClient = ({
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {editingDbInstanceId ? (
+              <form
+                className="mb-4 grid gap-3 rounded-lg border p-4 md:grid-cols-2"
+                onSubmit={submitDbInstanceEdit}
+              >
+                <SelectField
+                  id="db-edit-business-system"
+                  label="업무 시스템"
+                  value={dbEditForm.businessSystemId}
+                  onChange={(businessSystemId) =>
+                    setDbEditForm((current) => ({ ...current, businessSystemId }))
+                  }
+                  options={businessSystemOptions}
+                />
+                <SelectField
+                  id="db-edit-dbms"
+                  label="DBMS"
+                  value={dbEditForm.dbmsType}
+                  onChange={(dbmsType) =>
+                    setDbEditForm((current) => ({ ...current, dbmsType }))
+                  }
+                  options={[
+                    { label: "MSSQL", value: "MSSQL" },
+                    { label: "Oracle", value: "ORACLE" },
+                    { label: "Azure SQL", value: "AZURE_SQL" },
+                  ]}
+                />
+                <div className="space-y-1.5">
+                  <Label htmlFor="db-edit-instance-name">인스턴스명</Label>
+                  <Input
+                    id="db-edit-instance-name"
+                    value={dbEditForm.instanceName}
+                    onChange={(event) =>
+                      setDbEditForm((current) => ({
+                        ...current,
+                        instanceName: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="db-edit-host">Host</Label>
+                  <Input
+                    id="db-edit-host"
+                    value={dbEditForm.host}
+                    onChange={(event) =>
+                      setDbEditForm((current) => ({ ...current, host: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="db-edit-port">Port</Label>
+                  <Input
+                    id="db-edit-port"
+                    type="number"
+                    value={dbEditForm.port}
+                    onChange={(event) =>
+                      setDbEditForm((current) => ({ ...current, port: event.target.value }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="db-edit-name">Database</Label>
+                  <Input
+                    id="db-edit-name"
+                    value={dbEditForm.databaseName}
+                    onChange={(event) =>
+                      setDbEditForm((current) => ({
+                        ...current,
+                        databaseName: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <SelectField
+                  id="db-edit-importance"
+                  label="중요도"
+                  value={dbEditForm.importance}
+                  onChange={(importance) =>
+                    setDbEditForm((current) => ({ ...current, importance }))
+                  }
+                  options={[
+                    { label: "낮음", value: "LOW" },
+                    { label: "보통", value: "MEDIUM" },
+                    { label: "높음", value: "HIGH" },
+                    { label: "중요", value: "CRITICAL" },
+                  ]}
+                />
+                <SelectField
+                  id="db-edit-env"
+                  label="환경"
+                  value={dbEditForm.envType}
+                  onChange={(envType) =>
+                    setDbEditForm((current) => ({ ...current, envType }))
+                  }
+                  options={[
+                    { label: "운영", value: "PROD" },
+                    { label: "개발", value: "DEV" },
+                    { label: "스테이징", value: "STG" },
+                    { label: "DR", value: "DR" },
+                  ]}
+                />
+                <div className="space-y-1.5">
+                  <Label htmlFor="db-edit-collector-id">Collector ID</Label>
+                  <Input
+                    id="db-edit-collector-id"
+                    value={dbEditForm.collectorId}
+                    onChange={(event) =>
+                      setDbEditForm((current) => ({
+                        ...current,
+                        collectorId: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="db-edit-collect-interval">수집 주기(초)</Label>
+                  <Input
+                    id="db-edit-collect-interval"
+                    type="number"
+                    min={5}
+                    max={60}
+                    value={dbEditForm.collectIntervalSec}
+                    onChange={(event) =>
+                      setDbEditForm((current) => ({
+                        ...current,
+                        collectIntervalSec: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="db-edit-sql-interval">SQL 집계 주기(초)</Label>
+                  <Input
+                    id="db-edit-sql-interval"
+                    type="number"
+                    min={10}
+                    max={300}
+                    value={dbEditForm.sqlAggregateIntervalSec}
+                    onChange={(event) =>
+                      setDbEditForm((current) => ({
+                        ...current,
+                        sqlAggregateIntervalSec: event.target.value,
+                      }))
+                    }
+                  />
+                </div>
+                <div className="pt-6">
+                  <CheckboxField
+                    id="db-edit-is-active"
+                    label="수집 활성화"
+                    checked={dbEditForm.isActive}
+                    onChange={(isActive) =>
+                      setDbEditForm((current) => ({ ...current, isActive }))
+                    }
+                  />
+                </div>
+                <div className="flex gap-2 md:col-span-2">
+                  <Button type="submit">수정 저장</Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setEditingDbInstanceId(null);
+                      setDbEditForm(defaultDbInstanceForm);
+                    }}
+                  >
+                    취소
+                  </Button>
+                </div>
+              </form>
+            ) : null}
             {loading ? (
               <LoadingSkeleton rows={5} />
             ) : dbInstances.length === 0 ? (
@@ -878,6 +1594,13 @@ export const DbInstanceManagementClient = ({
                           <Button
                             variant="outline"
                             size="sm"
+                            onClick={() => startDbInstanceEdit(instance)}
+                          >
+                            수정
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
                             onClick={() => openSecretForm(instance)}
                           >
                             Secret 등록
@@ -895,6 +1618,13 @@ export const DbInstanceManagementClient = ({
                             disabled={testingId === instance.id}
                           >
                             {testingId === instance.id ? "확인 중" : "연결 테스트"}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => void deleteDbInstanceById(instance.id)}
+                          >
+                            삭제
                           </Button>
                         </TableCell>
                       </TableRow>

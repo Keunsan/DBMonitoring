@@ -17,8 +17,13 @@ export type ResourceSummary = {
   logUsedPercent: number | null;
   tempdbUsedMb: number | null;
   batchRequestsPerSec: number | null;
+  transactionsPerSec: number | null;
   userConnections: number | null;
   processesBlocked: number | null;
+  sessionTotalCount: number | null;
+  sessionActiveCount: number | null;
+  sessionIdleCount: number | null;
+  sessionRunningSqlCount: number | null;
 };
 
 const getMetricValue = (
@@ -65,8 +70,16 @@ export const buildResourceSummary = (
       metrics,
       SERVER_METRIC_KEYS.batchRequestsPerSec,
     ),
+    transactionsPerSec: getMetricValue(metrics, SERVER_METRIC_KEYS.transactionsPerSec),
     userConnections: getMetricValue(metrics, SERVER_METRIC_KEYS.userConnections),
     processesBlocked: getMetricValue(metrics, SERVER_METRIC_KEYS.processesBlocked),
+    sessionTotalCount: getMetricValue(metrics, SERVER_METRIC_KEYS.sessionTotalCount),
+    sessionActiveCount: getMetricValue(metrics, SERVER_METRIC_KEYS.sessionActiveCount),
+    sessionIdleCount: getMetricValue(metrics, SERVER_METRIC_KEYS.sessionIdleCount),
+    sessionRunningSqlCount: getMetricValue(
+      metrics,
+      SERVER_METRIC_KEYS.sessionRunningSqlCount,
+    ),
   };
 };
 
@@ -87,16 +100,14 @@ export const getResourceHealth = (
       if (value >= 85) return "caution";
       return "normal";
     case "memoryUsedPercent":
+    case "storageUsedPercent":
+    case "logUsedPercent":
       if (value >= 90) return "warning";
       if (value >= 75) return "caution";
       return "normal";
     case "pageLifeExpectancy":
       if (value <= 60) return "warning";
       if (value <= 180) return "caution";
-      return "normal";
-    case "logUsedPercent":
-      if (value >= 90) return "warning";
-      if (value >= 80) return "caution";
       return "normal";
     case "diskReadLatencyMs":
     case "diskWriteLatencyMs":
