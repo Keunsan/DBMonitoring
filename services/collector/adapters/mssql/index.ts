@@ -2,6 +2,7 @@
 
 import sql from "mssql";
 
+import { SERVER_METRIC_KEYS } from "@/lib/monitoring/metric-keys";
 import { getErpConnectionFailureMessage, getErpTestDbConfig } from "@/lib/db/erp-test";
 import type {
   AvailabilityPayload,
@@ -175,42 +176,312 @@ export const createMssqlCollectorAdapter = (
     },
     collectMetrics: async (): Promise<MetricPayload[]> => {
       const collectTime = now();
-      const rows = await withConnection(async (connection) => {
-        const result = await connection.request().query<MetricRow>(`
-          SELECT
-            RTRIM(counter_name) AS metricName,
-            CAST(cntr_value AS float) AS metricValue,
-            CASE
-              WHEN counter_name LIKE '%/sec' THEN 'per_second'
-              WHEN counter_name LIKE '%ratio%' THEN 'ratio'
-              ELSE 'count'
-            END AS unit,
-            RTRIM(object_name) AS objectName,
-            NULLIF(RTRIM(instance_name), '') AS instanceName
-          FROM sys.dm_os_performance_counters
-          WHERE counter_name IN (
-            'Batch Requests/sec',
-            'SQL Compilations/sec',
-            'SQL Re-Compilations/sec',
-            'Page life expectancy',
-            'User Connections',
-            'Processes blocked'
+
+      return withConnection(async (connection) => {
+        const metrics: MetricPayload[] = [];
+
+        const push = (
+          metricName: string,
+          metricValue: number,
+          unit: string,
+          tags: Record<string, string> = {},
+        ) => {
+          metrics.push({
+            collectTime,
+            metricName,
+            metricValue,
+            unit,
+            tags,
+          });
+        };
+
+        const safeQuery = async <T>(label: string, query: () => Promise<T>) => {
+          try {
+            return await query();
+          } catch (error) {
+            if (process.env.NODE_ENV === "development") {
+              console.warn(`[MSSQL_COLLECT_METRIC_SKIP] ${label}`, error);
+            }
+            return null;
+          }
+        };
+
+        const counterRows = await safeQuery("performance_counters", async () => {
+          const result = await connection.request().query<MetricRow>(`
+            SELECT
+              RTRIM(counter_name) AS metricName,
+              CAST(cntr_value AS float) AS metricValue,
+              CASE
+                WHEN counter_name LIKE '%/sec' THEN 'per_second'
+                WHEN counter_name LIKE '%ratio%' THEN 'ratio'
+                ELSE 'count'
+              END AS unit,
+              RTRIM(object_name) AS objectName,
+              NULLIF(RTRIM(instance_name), '') AS instanceName
+            FROM sys.dm_os_performance_counters
+            WHERE counter_name IN (
+              'Batch Requests/sec',
+              'Transactions/sec',
+              'Log Flushes/sec',
+              'Page life expectancy',
+              'User Connections',
+              'Processes blocked',
+              'Memory Grants Pending',
+              'Process % Processor Time',
+              '% Processor Time'
+            )
+          `);
+          return result.recordset;
+        });
+
+        if (counterRows) {
+          const counterMap = new Map(
+            counterRows.map((row) => [
+              `${row.objectName ?? ""}|${row.instanceName ?? ""}|${row.metricName}`,
+              row,
+            ]),
           );
-        `);
 
-        return result.recordset;
+          const getCounter = (objectName: string, counterName: string, instance = "") => {
+            const key = `${objectName}|${instance}|${counterName}`;
+            return counterMap.get(key);
+          };
+
+          const cpuProcess = getCounter("Process", "Process % Processor Time", "_Total");
+          const cpuTotal = getCounter("Processor", "% Processor Time", "_Total");
+          const cpuRow =
+            cpuProcess ??
+            cpuTotal ??
+            counterRows.find(
+              (row) =>
+                row.metricName === "Process % Processor Time" ||
+                row.metricName === "% Processor Time",
+            );
+          if (cpuRow) {
+            push(
+              SERVER_METRIC_KEYS.cpuUsedPercent,
+              Math.min(100, Math.max(0, cpuRow.metricValue)),
+              "percent",
+              { rawName: cpuRow.metricName, source: "dm_os_performance_counters" },
+            );
+          }
+
+          const ple = getCounter("SQLServer:Buffer Manager", "Page life expectancy");
+          if (ple) {
+            push(SERVER_METRIC_KEYS.pageLifeExpectancy, ple.metricValue, "seconds", {
+              rawName: ple.metricName,
+            });
+          }
+
+          const mgp = getCounter("SQLServer:Memory Manager", "Memory Grants Pending");
+          if (mgp) {
+            push(SERVER_METRIC_KEYS.memoryGrantsPending, mgp.metricValue, "count", {
+              rawName: mgp.metricName,
+            });
+          }
+
+          const batch = getCounter("SQLServer:SQL Statistics", "Batch Requests/sec");
+          if (batch) {
+            push(SERVER_METRIC_KEYS.batchRequestsPerSec, batch.metricValue, "per_second", {
+              rawName: batch.metricName,
+            });
+          }
+
+          const txn = getCounter("SQLServer:Databases", "Transactions/sec");
+          if (txn) {
+            push(SERVER_METRIC_KEYS.transactionsPerSec, txn.metricValue, "per_second", {
+              rawName: txn.metricName,
+            });
+          }
+
+          const logFlush = getCounter("SQLServer:Databases", "Log Flushes/sec");
+          if (logFlush) {
+            push(SERVER_METRIC_KEYS.logFlushesPerSec, logFlush.metricValue, "per_second", {
+              rawName: logFlush.metricName,
+            });
+          }
+
+          const userConn = getCounter("SQLServer:General Statistics", "User Connections");
+          if (userConn) {
+            push(SERVER_METRIC_KEYS.userConnections, userConn.metricValue, "count", {
+              rawName: userConn.metricName,
+            });
+          }
+
+          const blocked = getCounter("SQLServer:General Statistics", "Processes blocked");
+          if (blocked) {
+            push(SERVER_METRIC_KEYS.processesBlocked, blocked.metricValue, "count", {
+              rawName: blocked.metricName,
+            });
+          }
+        }
+
+        const memoryRow = await safeQuery("os_memory", async () => {
+          const result = await connection.request().query<{
+            totalPhysicalMemoryKb: number;
+            availablePhysicalMemoryKb: number;
+          }>(`
+            SELECT
+              CAST(total_physical_memory_kb AS float) AS totalPhysicalMemoryKb,
+              CAST(available_physical_memory_kb AS float) AS availablePhysicalMemoryKb
+            FROM sys.dm_os_sys_memory;
+          `);
+          return result.recordset[0] ?? null;
+        });
+
+        if (memoryRow && memoryRow.totalPhysicalMemoryKb > 0) {
+          const totalMb = memoryRow.totalPhysicalMemoryKb / 1024;
+          const availMb = memoryRow.availablePhysicalMemoryKb / 1024;
+          const usedPercent =
+            ((memoryRow.totalPhysicalMemoryKb - memoryRow.availablePhysicalMemoryKb) /
+              memoryRow.totalPhysicalMemoryKb) *
+            100;
+          push(SERVER_METRIC_KEYS.memoryTotalMb, totalMb, "mb", { source: "dm_os_sys_memory" });
+          push(SERVER_METRIC_KEYS.memoryAvailableMb, availMb, "mb", {
+            source: "dm_os_sys_memory",
+          });
+          push(SERVER_METRIC_KEYS.memoryUsedPercent, usedPercent, "percent", {
+            source: "dm_os_sys_memory",
+          });
+        }
+
+        const sqlMemoryRow = await safeQuery("process_memory", async () => {
+          const result = await connection.request().query<{
+            memoryUtilizationPercentage: number;
+            physicalMemoryInUseKb: number;
+          }>(`
+            SELECT
+              CAST(memory_utilization_percentage AS float) AS memoryUtilizationPercentage,
+              CAST(physical_memory_in_use_kb AS float) AS physicalMemoryInUseKb
+            FROM sys.dm_os_process_memory;
+          `);
+          return result.recordset[0] ?? null;
+        });
+
+        if (sqlMemoryRow && metrics.every((m) => m.metricName !== SERVER_METRIC_KEYS.memoryUsedPercent)) {
+          push(
+            SERVER_METRIC_KEYS.memoryUsedPercent,
+            sqlMemoryRow.memoryUtilizationPercentage,
+            "percent",
+            { source: "dm_os_process_memory" },
+          );
+        }
+
+        const ioRow = await safeQuery("io_stats", async () => {
+          const result = await connection.request().query<{
+            numReads: number;
+            numWrites: number;
+            readStallMs: number;
+            writeStallMs: number;
+          }>(`
+            SELECT
+              CAST(SUM(num_of_reads) AS float) AS numReads,
+              CAST(SUM(num_of_writes) AS float) AS numWrites,
+              CAST(SUM(io_stall_read_ms) AS float) AS readStallMs,
+              CAST(SUM(io_stall_write_ms) AS float) AS writeStallMs
+            FROM sys.dm_io_virtual_file_stats(DB_ID(), NULL);
+          `);
+          return result.recordset[0] ?? null;
+        });
+
+        if (ioRow) {
+          push(SERVER_METRIC_KEYS.diskReadIops, ioRow.numReads, "count", {
+            source: "dm_io_virtual_file_stats",
+          });
+          push(SERVER_METRIC_KEYS.diskWriteIops, ioRow.numWrites, "count", {
+            source: "dm_io_virtual_file_stats",
+          });
+          if (ioRow.numReads > 0) {
+            push(
+              SERVER_METRIC_KEYS.diskReadLatencyMs,
+              ioRow.readStallMs / ioRow.numReads,
+              "ms",
+              { source: "dm_io_virtual_file_stats" },
+            );
+          }
+          if (ioRow.numWrites > 0) {
+            push(
+              SERVER_METRIC_KEYS.diskWriteLatencyMs,
+              ioRow.writeStallMs / ioRow.numWrites,
+              "ms",
+              { source: "dm_io_virtual_file_stats" },
+            );
+          }
+        }
+
+        const fileRows = await safeQuery("database_files", async () => {
+          const result = await connection.request().query<{
+            typeDesc: string;
+            sizeMb: number;
+            usedMb: number;
+          }>(`
+            SELECT
+              type_desc AS typeDesc,
+              CAST(size * 8.0 / 1024 AS float) AS sizeMb,
+              CAST(FILEPROPERTY(name, 'SpaceUsed') * 8.0 / 1024 AS float) AS usedMb
+            FROM sys.database_files;
+          `);
+          return result.recordset;
+        });
+
+        if (fileRows) {
+          let dataSizeMb = 0;
+          let dataUsedMb = 0;
+          let logSizeMb = 0;
+          let logUsedMb = 0;
+
+          for (const file of fileRows) {
+            if (file.typeDesc === "ROWS") {
+              dataSizeMb += file.sizeMb;
+              dataUsedMb += file.usedMb ?? 0;
+            }
+            if (file.typeDesc === "LOG") {
+              logSizeMb += file.sizeMb;
+              logUsedMb += file.usedMb ?? 0;
+            }
+          }
+
+          if (dataSizeMb > 0) {
+            push(SERVER_METRIC_KEYS.storageDataSizeMb, dataSizeMb, "mb", {
+              source: "sys.database_files",
+            });
+            push(SERVER_METRIC_KEYS.storageDataUsedMb, dataUsedMb, "mb", {
+              source: "sys.database_files",
+            });
+          }
+
+          if (logSizeMb > 0) {
+            push(
+              SERVER_METRIC_KEYS.logUsedPercent,
+              (logUsedMb / logSizeMb) * 100,
+              "percent",
+              { source: "sys.database_files" },
+            );
+            push(SERVER_METRIC_KEYS.logUsedMb, logUsedMb, "mb", {
+              source: "sys.database_files",
+            });
+          }
+        }
+
+        const tempdbRow = await safeQuery("tempdb_size", async () => {
+          const result = await connection.request().query<{ usedMb: number }>(`
+            SELECT
+              CAST(SUM(
+                COALESCE(FILEPROPERTY(name, 'SpaceUsed'), size) * 8.0 / 1024
+              ) AS float) AS usedMb
+            FROM tempdb.sys.database_files;
+          `);
+          return result.recordset[0] ?? null;
+        });
+
+        if (tempdbRow && tempdbRow.usedMb !== null && !Number.isNaN(tempdbRow.usedMb)) {
+          push(SERVER_METRIC_KEYS.tempdbUsedMb, tempdbRow.usedMb, "mb", {
+            source: "tempdb.sys.database_files",
+          });
+        }
+
+        return metrics;
       });
-
-      return rows.map((row) => ({
-        collectTime,
-        metricName: row.metricName,
-        metricValue: Number(row.metricValue) || 0,
-        unit: row.unit ?? "value",
-        tags: {
-          objectName: row.objectName ?? "",
-          instanceName: row.instanceName ?? "",
-        },
-      }));
     },
     collectSessions: async (): Promise<SessionPayload[]> => {
       const collectTime = now();

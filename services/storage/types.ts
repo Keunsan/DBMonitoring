@@ -1,5 +1,6 @@
 /** 수집 결과 저장·정규화 레코드 타입입니다. */
 
+import type { ResourceSummary } from "@/lib/monitoring/resource-summary";
 import type { CollectStatus, DbInstanceId, TenantId } from "@/types/domain";
 
 export type CollectionRunRecord = {
@@ -91,6 +92,7 @@ export type MonitoringSummary = {
   dbInstanceId: DbInstanceId;
   lastRun: CollectionRunRecord | null;
   latestMetrics: MetricHistoryRecord[];
+  resourceSummary: ResourceSummary;
   latestSessions: SessionSnapshotRecord[];
   latestSql: SqlPerformanceRecord[];
   blockingCount: number;

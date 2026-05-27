@@ -1,5 +1,6 @@
 /** 개발용 메모리 기반 수집 결과 저장소입니다. */
 
+import { buildResourceSummary } from "@/lib/monitoring/resource-summary";
 import type { CollectorRunResult } from "@/services/collector/types";
 import { normalizeCollectorRun } from "@/services/storage/normalize";
 import type {
@@ -179,16 +180,19 @@ export const getMonitoringSummary = (
     .sessionSnapshots.filter((session) => session.dbInstanceId === dbInstanceId)
     .at(-1)?.snapshotTime;
 
+  const latestMetrics = latestMetricTime
+    ? getState().metricHistory.filter(
+        (metric) =>
+          metric.dbInstanceId === dbInstanceId &&
+          metric.metricTime === latestMetricTime,
+      )
+    : [];
+
   return {
     dbInstanceId,
     lastRun: latestRun,
-    latestMetrics: latestMetricTime
-      ? getState().metricHistory.filter(
-          (metric) =>
-            metric.dbInstanceId === dbInstanceId &&
-            metric.metricTime === latestMetricTime,
-        )
-      : [],
+    latestMetrics,
+    resourceSummary: buildResourceSummary(latestMetrics),
     latestSessions: latestSessionTime
       ? getState().sessionSnapshots.filter(
           (session) =>

@@ -1,6 +1,7 @@
 /** 임계치 정책 관리와 알림 이벤트 생성 서비스입니다. */
 
 import { listBusinessSystems, listDbInstances } from "@/lib/inventory/store";
+import { SERVER_METRIC_KEYS } from "@/lib/monitoring/metric-keys";
 import {
   listBlockingSnapshots,
   listCollectionRuns,
@@ -227,7 +228,10 @@ const getPolicyValue = (dbInstanceId: DbInstanceId, metricKey: ThresholdMetricKe
     case "CONNECTION_FAILURE":
       return lastRun?.status === "FAIL" ? 1 : 0;
     case "USER_CONNECTIONS":
-      return getLatestMetricValue(dbInstanceId, "User Connections");
+      return (
+        getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.userConnections) ??
+        getLatestMetricValue(dbInstanceId, "User Connections")
+      );
     case "ACTIVE_SESSIONS":
       return listSessionSnapshots(dbInstanceId, 200).filter(
         (session) => session.status === "running",
@@ -244,9 +248,15 @@ const getPolicyValue = (dbInstanceId: DbInstanceId, metricKey: ThresholdMetricKe
     case "DEADLOCK_COUNT":
       return listDeadlockEvents(dbInstanceId, 100).length;
     case "PAGE_LIFE_EXPECTANCY":
-      return getLatestMetricValue(dbInstanceId, "Page life expectancy");
+      return (
+        getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.pageLifeExpectancy) ??
+        getLatestMetricValue(dbInstanceId, "Page life expectancy")
+      );
     case "BATCH_REQUESTS_PER_SEC":
-      return getLatestMetricValue(dbInstanceId, "Batch Requests/sec");
+      return (
+        getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.batchRequestsPerSec) ??
+        getLatestMetricValue(dbInstanceId, "Batch Requests/sec")
+      );
     case "SQL_AVG_ELAPSED_MS":
       return Math.max(
         0,

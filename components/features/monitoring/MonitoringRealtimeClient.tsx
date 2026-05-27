@@ -4,8 +4,13 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
+import { DbResourceCard } from "@/components/features/monitoring/DbResourceCard";
+import { ResourceMetricGrid } from "@/components/features/monitoring/ResourceMetricGrid";
+import { ResourceOverviewCards } from "@/components/features/monitoring/ResourceOverviewCards";
+import { ResourceTopLists } from "@/components/features/monitoring/ResourceTopLists";
+import { ResourceTrendChart } from "@/components/features/monitoring/ResourceTrendChart";
 import { PageHeader } from "@/components/layout";
-import { EmptyState, StatusBadge } from "@/components/shared";
+import { EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,6 +20,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -22,14 +34,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { ResourceSummary } from "@/lib/monitoring/resource-summary";
 import type { ApiResponse } from "@/types/api";
 import type { AlertEvent, DbInstance } from "@/types/entities";
 
 type MetricItem = {
+  id: string;
   metricName: string;
   metricValue: number;
   unit: string | null;
   metricTime: string;
+  tags?: Record<string, string>;
 };
 
 type SessionItem = {
@@ -69,6 +84,7 @@ type SummaryItem = {
       errorMessage: string | null;
     } | null;
     latestMetrics: MetricItem[];
+    resourceSummary: ResourceSummary;
     latestSessions: SessionItem[];
     latestSql: SqlItem[];
     blockingCount: number;
@@ -103,9 +119,6 @@ const requestJson = async <T,>(url: string, init?: RequestInit) => {
 const formatNumber = (value: number) =>
   Intl.NumberFormat("ko-KR", { maximumFractionDigits: 1 }).format(value);
 
-const getMetric = (item: SummaryItem, name: string) =>
-  item.summary.latestMetrics.find((metric) => metric.metricName === name)?.metricValue ?? 0;
-
 /**
  * 최신 수집 요약과 알림을 주기적으로 조회합니다.
  */
@@ -120,8 +133,16 @@ export const MonitoringRealtimeClient = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
 
-  const selected = items[0] ?? null;
+  const activeInstanceId = selectedId ?? items[0]?.instance.id;
+
+  const selected = useMemo(() => {
+    if (items.length === 0 || !activeInstanceId) {
+      return null;
+    }
+    return items.find((item) => item.instance.id === activeInstanceId) ?? items[0];
+  }, [activeInstanceId, items]);
 
   const refresh = async () => {
     const [summaryPayload, alertPayload] = await Promise.all([
@@ -232,12 +253,15 @@ export const MonitoringRealtimeClient = ({
         ) : (
           <>
             {variant === "dashboard" ? (
-              <div className="grid gap-4 md:grid-cols-4">
-                <StatCard title="전체 DB" value={dashboardStats.total} />
-                <StatCard title="수집 정상" value={dashboardStats.ok} />
-                <StatCard title="수집 실패" value={dashboardStats.fail} />
-                <StatCard title="미확인 알림" value={dashboardStats.alerts} />
-              </div>
+              <DashboardResourceView items={items} dashboardStats={dashboardStats} />
+            ) : null}
+            {variant === "realtime" && selected && activeInstanceId ? (
+              <RealtimeResourceView
+                item={selected}
+                items={items}
+                selectedId={activeInstanceId}
+                onSelectId={setSelectedId}
+              />
             ) : null}
             {variant === "alerts" ? (
               <AlertsTable alerts={alerts} />
@@ -249,9 +273,7 @@ export const MonitoringRealtimeClient = ({
               <DeadlockCard count={selected?.summary.deadlockCount ?? 0} />
             ) : variant === "top-sql" ? (
               <SqlTable sql={selected?.summary.latestSql ?? []} />
-            ) : (
-              <RealtimeCards items={items} />
-            )}
+            ) : null}
           </>
         )}
       </div>
@@ -268,46 +290,103 @@ const StatCard = ({ title, value }: { title: string; value: number }) => (
   </Card>
 );
 
-const RealtimeCards = ({ items }: { items: SummaryItem[] }) => (
-  <div className="grid gap-4 xl:grid-cols-2">
-    {items.map((item) => (
-      <Card key={item.instance.id}>
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle>{item.instance.instanceName}</CardTitle>
-              <CardDescription>
-                {item.instance.dbmsType} / {item.instance.databaseName ?? "-"}
-              </CardDescription>
-            </div>
-            {item.summary.lastRun ? (
-              <StatusBadge kind="collect" value={item.summary.lastRun.status} />
-            ) : null}
-          </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-3">
-          <MetricBox
-            label="User Connections"
-            value={getMetric(item, "User Connections")}
-          />
-          <MetricBox
-            label="Batch Requests/sec"
-            value={getMetric(item, "Batch Requests/sec")}
-          />
-          <MetricBox
-            label="PLE"
-            value={getMetric(item, "Page life expectancy")}
-          />
-        </CardContent>
-      </Card>
-    ))}
-  </div>
-);
+const DashboardResourceView = ({
+  items,
+  dashboardStats,
+}: {
+  items: SummaryItem[];
+  dashboardStats: { total: number; ok: number; fail: number; alerts: number };
+}) => {
+  const resourceItems = items.map((item) => ({
+    instance: item.instance,
+    resourceSummary: item.summary.resourceSummary,
+  }));
 
-const MetricBox = ({ label, value }: { label: string; value: number }) => (
-  <div className="rounded-lg border bg-muted/30 p-3">
-    <div className="text-muted-foreground text-xs">{label}</div>
-    <div className="mt-1 text-lg font-semibold">{formatNumber(value)}</div>
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <StatCard title="전체 DB" value={dashboardStats.total} />
+        <StatCard title="수집 정상" value={dashboardStats.ok} />
+        <StatCard title="수집 실패" value={dashboardStats.fail} />
+        <StatCard title="미확인 알림" value={dashboardStats.alerts} />
+      </div>
+      <ResourceTopLists items={resourceItems} />
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium">DB별 서버 리소스 현황</h3>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {items.map((item) => (
+            <DbResourceCard
+              key={item.instance.id}
+              instance={item.instance}
+              resourceSummary={item.summary.resourceSummary}
+              collectStatus={item.summary.lastRun?.status ?? null}
+            />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+const RealtimeResourceView = ({
+  item,
+  items,
+  selectedId,
+  onSelectId,
+}: {
+  item: SummaryItem;
+  items: SummaryItem[];
+  selectedId: string;
+  onSelectId: (id: string) => void;
+}) => (
+  <div className="space-y-6">
+    {items.length > 1 ? (
+      <div className="max-w-sm">
+        <Select value={selectedId} onValueChange={onSelectId}>
+          <SelectTrigger>
+            <SelectValue placeholder="DB 인스턴스 선택" />
+          </SelectTrigger>
+          <SelectContent>
+            {items.map((entry) => (
+              <SelectItem key={entry.instance.id} value={entry.instance.id}>
+                {entry.instance.instanceName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    ) : null}
+    <ResourceOverviewCards
+      title={`${item.instance.instanceName} 서버 상태`}
+      resource={item.summary.resourceSummary}
+    />
+    <ResourceTrendChart dbInstanceId={item.instance.id} />
+    <Card>
+      <CardHeader>
+        <CardTitle>세부 리소스 지표</CardTitle>
+        <CardDescription>
+          최근 수집 시각:{" "}
+          {item.summary.latestMetrics[0]?.metricTime
+            ? new Date(item.summary.latestMetrics[0].metricTime).toLocaleString("ko-KR")
+            : "-"}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <ResourceMetricGrid
+          metrics={item.summary.latestMetrics.map((metric) => ({
+            id: metric.id,
+            tenantId: item.instance.tenantId,
+            dbInstanceId: item.instance.id,
+            metricTime: metric.metricTime,
+            metricName: metric.metricName,
+            metricValue: metric.metricValue,
+            unit: metric.unit,
+            tags: metric.tags ?? {},
+          }))}
+          resource={item.summary.resourceSummary}
+        />
+      </CardContent>
+    </Card>
   </div>
 );
 
