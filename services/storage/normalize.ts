@@ -8,23 +8,17 @@ import type {
   MetricHistoryRecord,
   SessionSnapshotRecord,
   SqlPerformanceRecord,
+  SqlPlanSnapshotRecord,
 } from "@/services/storage/types";
+import { createUuid } from "@/lib/create-uuid";
 import { DEFAULT_TENANT_ID } from "@/types/domain";
-
-const createId = (prefix: string) => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `${prefix}_${crypto.randomUUID()}`;
-  }
-
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-};
 
 /**
  * 단일 Collector 실행 결과를 저장 가능한 정규화 레코드로 변환합니다.
  */
 export const normalizeCollectorRun = (result: CollectorRunResult) => {
   const collectionRun: CollectionRunRecord = {
-    id: createId("run"),
+    id: createUuid(),
     tenantId: DEFAULT_TENANT_ID,
     dbInstanceId: result.dbInstanceId,
     startedAt: result.startedAt,
@@ -38,7 +32,7 @@ export const normalizeCollectorRun = (result: CollectorRunResult) => {
   };
 
   const metricHistory: MetricHistoryRecord[] = result.metrics.map((metric) => ({
-    id: createId("metric"),
+    id: createUuid(),
     tenantId: DEFAULT_TENANT_ID,
     dbInstanceId: result.dbInstanceId,
     metricTime: metric.collectTime,
@@ -49,7 +43,7 @@ export const normalizeCollectorRun = (result: CollectorRunResult) => {
   }));
 
   const sessionSnapshots: SessionSnapshotRecord[] = result.sessions.map((session) => ({
-    id: createId("session"),
+    id: createUuid(),
     tenantId: DEFAULT_TENANT_ID,
     dbInstanceId: result.dbInstanceId,
     snapshotTime: session.collectTime,
@@ -70,7 +64,7 @@ export const normalizeCollectorRun = (result: CollectorRunResult) => {
   }));
 
   const blockingSnapshots: BlockingSnapshotRecord[] = result.locks.map((lock) => ({
-    id: createId("blocking"),
+    id: createUuid(),
     tenantId: DEFAULT_TENANT_ID,
     dbInstanceId: result.dbInstanceId,
     snapshotTime: lock.collectTime,
@@ -82,7 +76,7 @@ export const normalizeCollectorRun = (result: CollectorRunResult) => {
   }));
 
   const sqlPerformance: SqlPerformanceRecord[] = result.sql.map((sql) => ({
-    id: createId("sql"),
+    id: createUuid(),
     tenantId: DEFAULT_TENANT_ID,
     dbInstanceId: result.dbInstanceId,
     metricTime: sql.collectTime,
@@ -96,12 +90,26 @@ export const normalizeCollectorRun = (result: CollectorRunResult) => {
   }));
 
   const deadlocks: DeadlockRecord[] = result.deadlocks.map((deadlock) => ({
-    id: createId("deadlock"),
+    id: createUuid(),
     tenantId: DEFAULT_TENANT_ID,
     dbInstanceId: result.dbInstanceId,
     occurredAt: deadlock.occurredAt,
     victimSessionId: deadlock.victimSessionId,
     graphXml: deadlock.graphXml,
+  }));
+
+  const sqlPlanSnapshots: SqlPlanSnapshotRecord[] = (result.sqlPlans ?? []).map((plan) => ({
+    id: createUuid(),
+    tenantId: DEFAULT_TENANT_ID,
+    dbInstanceId: result.dbInstanceId,
+    capturedAt: plan.collectTime,
+    sqlId: plan.sqlId,
+    planHash: plan.planHash,
+    planText: plan.planText,
+    avgElapsedMs: plan.avgElapsedMs,
+    totalCpuMs: plan.totalCpuMs,
+    totalLogicalReads: plan.totalLogicalReads ?? null,
+    executions: plan.executions,
   }));
 
   return {
@@ -110,6 +118,7 @@ export const normalizeCollectorRun = (result: CollectorRunResult) => {
     sessionSnapshots,
     blockingSnapshots,
     sqlPerformance,
+    sqlPlanSnapshots,
     deadlocks,
   };
 };

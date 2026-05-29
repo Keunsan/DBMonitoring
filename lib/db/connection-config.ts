@@ -27,7 +27,11 @@ export const buildMssqlPoolConfig = (
     password: credential.password,
     connectionTimeout:
       credential.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS,
-    requestTimeout: credential.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+    requestTimeout:
+      credential.requestTimeoutMs ??
+      (context.dbmsType === "AZURE_SQL"
+        ? 30_000
+        : DEFAULT_REQUEST_TIMEOUT_MS),
     options: {
       encrypt,
       trustServerCertificate,

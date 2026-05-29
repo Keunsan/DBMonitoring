@@ -147,9 +147,9 @@ flowchart TD
 
 | 항목 | 값 |
 |------|-----|
-| **다음 착수 권장 TASK** | T-038 |
-| **현재 Phase** | Phase 7 내부 테스트용 MVP 완료 / Phase 2·메신저·운영 DB 전환 보류 |
-| **전체 진행률** | 33 / 45 TASK 완료 |
+| **다음 착수 권장 TASK** | T-041 |
+| **현재 Phase** | Phase 8 SQL 분석 고도화 완료 / Phase 2·메신저·RLS 보류 |
+| **전체 진행률** | 36 / 45 TASK 완료 |
 
 > AGENT는 작업 착수 시 위 표를 갱신합니다.
 
@@ -886,9 +886,9 @@ flowchart TD
 | PRD 매핑 | FR-007, FR-008, 화면 §3.11 |
 | 목표 | SQL Text, 성능 추이, Plan 목록, Baseline 대비 변화 |
 | 완료 기준 | Plan 상세 보기, 마스킹 정책 적용 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-28 운영 저장소 전환 후 `/analysis/sql/[sqlId]`, `SqlDetailClient`, `GET /api/analysis/sql/[sqlId]` 구현. Top SQL에서 SQL ID 링크 연결. |
 
 ---
 
@@ -903,9 +903,9 @@ flowchart TD
 | PRD 매핑 | FR-008, 화면 §3.12 |
 | 목표 | Plan 변경 전후 CPU/I/O/시간 비교 |
 | 완료 기준 | 성능 악화 Plan 식별 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-28 `sql_plan_snapshot` 저장·`analyzePlanChanges`, `/analysis/plan-changes`, MSSQL `collectSqlPlans` 구현. |
 
 ---
 
@@ -920,9 +920,9 @@ flowchart TD
 | PRD 매핑 | FR-009, FR-010, 화면 §3.13 |
 | 목표 | Baseline 자동 산정, 회귀 SQL 목록, 권고 템플릿 |
 | 완료 기준 | 회귀 탐지 → 이슈 자동 생성 연계 |
-| 진행 상태 | `대기` |
-| 완료 여부 | ☐ |
-| 작업 내역 | _(미착수)_ |
+| 진행 상태 | `완료` |
+| 완료 여부 | ☑ |
+| 작업 내역 | 2026-05-28 `detectSqlRegressions`, `sql_regression_event`, `/analysis/regressions`, Collector 수집 후 자동 탐지. T-041 연동 전까지 `issueCandidate`만 노출. |
 
 ---
 

@@ -1,223 +1,169 @@
-/** 개발용 메모리 기반 수집 결과 저장소입니다. */
+/** 수집 결과 저장소 facade — Supabase 우선, 미설정 시 메모리 fallback입니다. */
 
-import { buildResourceSummary } from "@/lib/monitoring/resource-summary";
+import { isSupabaseMonitoringStorageEnabled } from "@/services/storage/supabase-store";
 import type { CollectorRunResult } from "@/services/collector/types";
-import { normalizeCollectorRun } from "@/services/storage/normalize";
 import type {
   BlockingSnapshotRecord,
   CollectionRunRecord,
   DeadlockRecord,
   MetricHistoryRecord,
   MonitoringSummary,
-  MonitoringStorageState,
   SessionSnapshotRecord,
   SqlPerformanceRecord,
+  SqlPlanSnapshotRecord,
+  SqlRegressionEventRecord,
 } from "@/services/storage/types";
 import type { DbInstanceId } from "@/types/domain";
 
-type GlobalMonitoringStorageState = typeof globalThis & {
-  __dbMonitoringStorageState?: MonitoringStorageState;
-};
+import {
+  getMonitoringStorageSummaryFromMemory,
+  getMonitoringSummaryFromMemory,
+  listBlockingSnapshotsFromMemory,
+  listCollectionRunsFromMemory,
+  listDeadlockEventsFromMemory,
+  listMetricHistoryFromMemory,
+  listSessionSnapshotsFromMemory,
+  listSqlPerformanceFromMemory,
+  listSqlPlanSnapshotsFromMemory,
+  listSqlRegressionEventsFromMemory,
+  saveCollectorRunToMemory,
+  saveSqlRegressionEventsToMemory,
+} from "./memory-store";
+import {
+  getMonitoringStorageSummaryFromSupabase,
+  getMonitoringSummaryFromSupabase,
+  listBlockingSnapshotsFromSupabase,
+  listCollectionRunsFromSupabase,
+  listDeadlockEventsFromSupabase,
+  listMetricHistoryFromSupabase,
+  listSessionSnapshotsFromSupabase,
+  listSqlPerformanceFromSupabase,
+  listSqlPlanSnapshotsFromSupabase,
+  listSqlRegressionEventsFromSupabase,
+  saveCollectorRunToSupabase,
+  saveSqlRegressionEventsToSupabase,
+} from "./supabase-store";
 
-const MAX_RECORDS_PER_BUCKET = 5_000;
-
-const getState = (): MonitoringStorageState => {
-  const globalState = globalThis as GlobalMonitoringStorageState;
-
-  if (!globalState.__dbMonitoringStorageState) {
-    globalState.__dbMonitoringStorageState = {
-      collectionRuns: [],
-      metricHistory: [],
-      sessionSnapshots: [],
-      blockingSnapshots: [],
-      sqlPerformance: [],
-      deadlocks: [],
-    };
-  }
-
-  return globalState.__dbMonitoringStorageState;
-};
-
-const trimBucket = <T>(items: T[]) => items.slice(-MAX_RECORDS_PER_BUCKET);
+const shouldUseSupabaseStorage = () => isSupabaseMonitoringStorageEnabled();
 
 /**
- * Collector 실행 결과를 메모리 저장소에 적재합니다.
+ * Collector 실행 결과를 저장합니다.
  */
-export const saveCollectorRun = (result: CollectorRunResult) => {
-  const state = getState();
-  const normalized = normalizeCollectorRun(result);
-
-  state.collectionRuns = trimBucket([
-    ...state.collectionRuns,
-    normalized.collectionRun,
-  ]);
-  state.metricHistory = trimBucket([
-    ...state.metricHistory,
-    ...normalized.metricHistory,
-  ]);
-  state.sessionSnapshots = trimBucket([
-    ...state.sessionSnapshots,
-    ...normalized.sessionSnapshots,
-  ]);
-  state.blockingSnapshots = trimBucket([
-    ...state.blockingSnapshots,
-    ...normalized.blockingSnapshots,
-  ]);
-  state.sqlPerformance = trimBucket([
-    ...state.sqlPerformance,
-    ...normalized.sqlPerformance,
-  ]);
-  state.deadlocks = trimBucket([...state.deadlocks, ...normalized.deadlocks]);
-
-  return normalized.collectionRun;
-};
+export const saveCollectorRun = async (result: CollectorRunResult) =>
+  shouldUseSupabaseStorage() ? saveCollectorRunToSupabase(result) : saveCollectorRunToMemory(result);
 
 /**
  * 최근 Collector 실행 이력을 반환합니다.
  */
-export const listCollectionRuns = (
+export const listCollectionRuns = async (
   dbInstanceId?: DbInstanceId,
-): CollectionRunRecord[] => {
-  const runs = getState().collectionRuns;
-  const filtered = dbInstanceId
-    ? runs.filter((run) => run.dbInstanceId === dbInstanceId)
-    : runs;
-
-  return [...filtered].reverse();
-};
+): Promise<CollectionRunRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listCollectionRunsFromSupabase(dbInstanceId)
+    : listCollectionRunsFromMemory(dbInstanceId);
 
 /**
  * 시계열 지표 이력을 반환합니다.
  */
-export const listMetricHistory = (params: {
+export const listMetricHistory = async (params: {
   dbInstanceId?: DbInstanceId;
   metricName?: string;
   limit?: number;
-}): MetricHistoryRecord[] => {
-  const limit = params.limit ?? 200;
-  const filtered = getState().metricHistory.filter((metric) => {
-    if (params.dbInstanceId && metric.dbInstanceId !== params.dbInstanceId) {
-      return false;
-    }
-
-    if (params.metricName && metric.metricName !== params.metricName) {
-      return false;
-    }
-
-    return true;
-  });
-
-  return filtered.slice(-limit).reverse();
-};
+}): Promise<MetricHistoryRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listMetricHistoryFromSupabase(params)
+    : listMetricHistoryFromMemory(params);
 
 /**
  * 최근 세션 스냅샷을 반환합니다.
  */
-export const listSessionSnapshots = (
+export const listSessionSnapshots = async (
   dbInstanceId?: DbInstanceId,
   limit = 200,
-): SessionSnapshotRecord[] => {
-  const filtered = getState().sessionSnapshots.filter(
-    (session) => !dbInstanceId || session.dbInstanceId === dbInstanceId,
-  );
-
-  return filtered.slice(-limit).reverse();
-};
+): Promise<SessionSnapshotRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listSessionSnapshotsFromSupabase(dbInstanceId, limit)
+    : listSessionSnapshotsFromMemory(dbInstanceId, limit);
 
 /**
  * 최근 SQL 성능 집계 결과를 반환합니다.
  */
-export const listSqlPerformance = (
+export const listSqlPerformance = async (
   dbInstanceId?: DbInstanceId,
   limit = 100,
-): SqlPerformanceRecord[] => {
-  const filtered = getState().sqlPerformance.filter(
-    (sql) => !dbInstanceId || sql.dbInstanceId === dbInstanceId,
-  );
+  sqlId?: string,
+): Promise<SqlPerformanceRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listSqlPerformanceFromSupabase(dbInstanceId, limit, sqlId)
+    : listSqlPerformanceFromMemory(dbInstanceId, limit, sqlId);
 
-  return filtered.slice(-limit).reverse();
-};
+/**
+ * SQL 실행 계획 스냅샷을 반환합니다.
+ */
+export const listSqlPlanSnapshots = async (params: {
+  dbInstanceId: DbInstanceId;
+  sqlId?: string;
+  limit?: number;
+}): Promise<SqlPlanSnapshotRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listSqlPlanSnapshotsFromSupabase(params)
+    : listSqlPlanSnapshotsFromMemory(params);
+
+/**
+ * SQL 성능 회귀 이벤트를 반환합니다.
+ */
+export const listSqlRegressionEvents = async (
+  dbInstanceId?: DbInstanceId,
+  limit = 100,
+): Promise<SqlRegressionEventRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listSqlRegressionEventsFromSupabase(dbInstanceId, limit)
+    : listSqlRegressionEventsFromMemory(dbInstanceId, limit);
+
+/**
+ * SQL 성능 회귀 이벤트를 저장합니다.
+ */
+export const saveSqlRegressionEvents = async (events: SqlRegressionEventRecord[]) =>
+  shouldUseSupabaseStorage()
+    ? saveSqlRegressionEventsToSupabase(events)
+    : saveSqlRegressionEventsToMemory(events);
 
 /**
  * 최근 Blocking 스냅샷을 반환합니다.
  */
-export const listBlockingSnapshots = (
+export const listBlockingSnapshots = async (
   dbInstanceId?: DbInstanceId,
   limit = 100,
-): BlockingSnapshotRecord[] => {
-  const filtered = getState().blockingSnapshots.filter(
-    (blocking) => !dbInstanceId || blocking.dbInstanceId === dbInstanceId,
-  );
-
-  return filtered.slice(-limit).reverse();
-};
+): Promise<BlockingSnapshotRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listBlockingSnapshotsFromSupabase(dbInstanceId, limit)
+    : listBlockingSnapshotsFromMemory(dbInstanceId, limit);
 
 /**
  * 최근 Deadlock 이벤트를 반환합니다.
  */
-export const listDeadlockEvents = (
+export const listDeadlockEvents = async (
   dbInstanceId?: DbInstanceId,
   limit = 100,
-): DeadlockRecord[] => {
-  const filtered = getState().deadlocks.filter(
-    (deadlock) => !dbInstanceId || deadlock.dbInstanceId === dbInstanceId,
-  );
-
-  return filtered.slice(-limit).reverse();
-};
+): Promise<DeadlockRecord[]> =>
+  shouldUseSupabaseStorage()
+    ? listDeadlockEventsFromSupabase(dbInstanceId, limit)
+    : listDeadlockEventsFromMemory(dbInstanceId, limit);
 
 /**
  * 대시보드와 실시간 화면에서 사용할 최신 모니터링 요약을 반환합니다.
  */
-export const getMonitoringSummary = (
+export const getMonitoringSummary = async (
   dbInstanceId: DbInstanceId,
-): MonitoringSummary => {
-  const latestRun = listCollectionRuns(dbInstanceId)[0] ?? null;
-  const latestMetricTime = getState()
-    .metricHistory.filter((metric) => metric.dbInstanceId === dbInstanceId)
-    .at(-1)?.metricTime;
-  const latestSessionTime = getState()
-    .sessionSnapshots.filter((session) => session.dbInstanceId === dbInstanceId)
-    .at(-1)?.snapshotTime;
-
-  const latestMetrics = latestMetricTime
-    ? getState().metricHistory.filter(
-        (metric) =>
-          metric.dbInstanceId === dbInstanceId &&
-          metric.metricTime === latestMetricTime,
-      )
-    : [];
-
-  return {
-    dbInstanceId,
-    lastRun: latestRun,
-    latestMetrics,
-    resourceSummary: buildResourceSummary(latestMetrics),
-    latestSessions: latestSessionTime
-      ? getState().sessionSnapshots.filter(
-          (session) =>
-            session.dbInstanceId === dbInstanceId &&
-            session.snapshotTime === latestSessionTime,
-        )
-      : [],
-    latestSql: listSqlPerformance(dbInstanceId, 10),
-    blockingCount: listBlockingSnapshots(dbInstanceId, 100).length,
-    deadlockCount: listDeadlockEvents(dbInstanceId, 100).length,
-  };
-};
+): Promise<MonitoringSummary> =>
+  shouldUseSupabaseStorage()
+    ? getMonitoringSummaryFromSupabase(dbInstanceId)
+    : getMonitoringSummaryFromMemory(dbInstanceId);
 
 /**
  * 저장소 상태 요약을 반환합니다.
  */
-export const getMonitoringStorageSummary = () => {
-  const state = getState();
-
-  return {
-    collectionRuns: state.collectionRuns.length,
-    metricHistory: state.metricHistory.length,
-    sessionSnapshots: state.sessionSnapshots.length,
-    blockingSnapshots: state.blockingSnapshots.length,
-    sqlPerformance: state.sqlPerformance.length,
-    deadlocks: state.deadlocks.length,
-  };
-};
+export const getMonitoringStorageSummary = async () =>
+  shouldUseSupabaseStorage()
+    ? getMonitoringStorageSummaryFromSupabase()
+    : getMonitoringStorageSummaryFromMemory();

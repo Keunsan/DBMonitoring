@@ -14,12 +14,12 @@ const parseLimit = (value: string | null) => {
 /**
  * DB 인스턴스 조건에 맞는 최근 Blocking 스냅샷을 반환합니다.
  */
-export const GET = withApiHandler(({ request }) => {
+export const GET = withApiHandler(async ({ request }) => {
   const url = new URL(request.url);
 
   return {
     data: {
-      items: listBlockingSnapshots(
+      items: await listBlockingSnapshots(
         url.searchParams.get("dbInstanceId") ?? undefined,
         parseLimit(url.searchParams.get("limit")),
       ),

@@ -215,57 +215,57 @@ const resolvePoliciesForInstance = async (
   return [...selected.values()];
 };
 
-const getLatestMetricValue = (
+const getLatestMetricValue = async (
   dbInstanceId: DbInstanceId,
   metricName: string,
-) => listMetricHistory({ dbInstanceId, metricName, limit: 1 })[0]?.metricValue ?? null;
+) => (await listMetricHistory({ dbInstanceId, metricName, limit: 1 }))[0]?.metricValue ?? null;
 
 const getPolicyValue = async (dbInstanceId: DbInstanceId, metricKey: ThresholdMetricKey) => {
   const instance = (await listDbInstances()).find((item) => item.id === dbInstanceId);
-  const lastRun = listCollectionRuns(dbInstanceId)[0];
+  const lastRun = (await listCollectionRuns(dbInstanceId))[0];
 
   switch (metricKey) {
     case "CONNECTION_FAILURE":
       return lastRun?.status === "FAIL" ? 1 : 0;
     case "USER_CONNECTIONS":
       return (
-        getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.userConnections) ??
-        getLatestMetricValue(dbInstanceId, "User Connections")
+        (await getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.userConnections)) ??
+        (await getLatestMetricValue(dbInstanceId, "User Connections"))
       );
     case "ACTIVE_SESSIONS":
-      return listSessionSnapshots(dbInstanceId, 200).filter(
+      return (await listSessionSnapshots(dbInstanceId, 200)).filter(
         (session) => session.status === "running",
       ).length;
     case "BLOCKING_SECONDS":
       return Math.max(
         0,
-        ...listBlockingSnapshots(dbInstanceId, 100).map(
+        ...(await listBlockingSnapshots(dbInstanceId, 100)).map(
           (blocking) => blocking.waitMs / 1_000,
         ),
       );
     case "BLOCKED_SESSIONS":
-      return listBlockingSnapshots(dbInstanceId, 100).length;
+      return (await listBlockingSnapshots(dbInstanceId, 100)).length;
     case "DEADLOCK_COUNT":
-      return listDeadlockEvents(dbInstanceId, 100).length;
+      return (await listDeadlockEvents(dbInstanceId, 100)).length;
     case "PAGE_LIFE_EXPECTANCY":
       return (
-        getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.pageLifeExpectancy) ??
-        getLatestMetricValue(dbInstanceId, "Page life expectancy")
+        (await getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.pageLifeExpectancy)) ??
+        (await getLatestMetricValue(dbInstanceId, "Page life expectancy"))
       );
     case "BATCH_REQUESTS_PER_SEC":
       return (
-        getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.batchRequestsPerSec) ??
-        getLatestMetricValue(dbInstanceId, "Batch Requests/sec")
+        (await getLatestMetricValue(dbInstanceId, SERVER_METRIC_KEYS.batchRequestsPerSec)) ??
+        (await getLatestMetricValue(dbInstanceId, "Batch Requests/sec"))
       );
     case "SQL_AVG_ELAPSED_MS":
       return Math.max(
         0,
-        ...listSqlPerformance(dbInstanceId, 20).map((sql) => sql.avgElapsedMs),
+        ...(await listSqlPerformance(dbInstanceId, 20)).map((sql) => sql.avgElapsedMs),
       );
     case "SQL_CPU_MS":
       return Math.max(
         0,
-        ...listSqlPerformance(dbInstanceId, 20).map((sql) => sql.totalCpuMs),
+        ...(await listSqlPerformance(dbInstanceId, 20)).map((sql) => sql.totalCpuMs),
       );
     case "COLLECT_DELAY": {
       if (!instance?.lastCollectAt || !instance.collectIntervalSec) {

@@ -14,6 +14,7 @@ import type {
   MetricPayload,
   SessionPayload,
   SqlPerformancePayload,
+  SqlPlanPayload,
 } from "@/services/collector/types";
 
 type AvailabilityRow = {
@@ -75,6 +76,16 @@ type SqlPerformanceRow = {
   lastExecutionTime: Date | string | null;
 };
 
+type SqlPlanRow = {
+  sqlId: string;
+  planHash: string;
+  planText: string | null;
+  executions: number;
+  avgElapsedMs: number;
+  totalCpuMs: number;
+  totalLogicalReads: number;
+};
+
 const now = () => new Date().toISOString();
 
 const maskSqlText = (sqlText: string | null | undefined) =>
@@ -92,6 +103,107 @@ const toIsoString = (value: Date | string | null) => {
 
   return value;
 };
+
+type CounterSampleRow = {
+  objectName: string;
+  instanceName: string | null;
+  metricName: string;
+  metricValue: number;
+};
+
+const PERFORMANCE_COUNTERS_RATE_SQL = `
+  SELECT
+    RTRIM(object_name) AS objectName,
+    NULLIF(RTRIM(instance_name), '') AS instanceName,
+    RTRIM(counter_name) AS metricName,
+    CAST(cntr_value AS float) AS metricValue
+  FROM sys.dm_os_performance_counters
+  WHERE counter_name IN (
+    'Batch Requests/sec',
+    'Transactions/sec',
+    'Log Flushes/sec'
+  )
+  AND (
+    object_name LIKE '%SQL Statistics%'
+    OR object_name LIKE '%:Databases%'
+  );
+`;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 성능 카운터를 두 번 샘플링해 초당 처리량(QPS/TPS 등)을 계산합니다.
+ */
+const samplePerformanceCounterRates = async (
+  connection: sql.ConnectionPool,
+): Promise<CounterRateRow[]> => {
+  const querySamples = async () => {
+    const result = await connection
+      .request()
+      .query<CounterSampleRow>(PERFORMANCE_COUNTERS_RATE_SQL);
+    return result.recordset;
+  };
+
+  const startedAtMs = Date.now();
+  const startRows = await querySamples();
+  await sleep(1_000);
+  const elapsedSeconds = Math.max((Date.now() - startedAtMs) / 1_000, 0.001);
+  const endRows = await querySamples();
+
+  const startMap = new Map(
+    startRows.map((row) => [
+      `${row.objectName}|${row.instanceName ?? ""}|${row.metricName}`,
+      row.metricValue,
+    ]),
+  );
+
+  const rates: CounterRateRow[] = [];
+
+  for (const endRow of endRows) {
+    const key = `${endRow.objectName}|${endRow.instanceName ?? ""}|${endRow.metricName}`;
+    const startedValue = startMap.get(key);
+
+    if (startedValue === undefined) {
+      continue;
+    }
+
+    const metricValue = (endRow.metricValue - startedValue) / elapsedSeconds;
+
+    if (!Number.isFinite(metricValue) || metricValue < 0) {
+      continue;
+    }
+
+    rates.push({
+      metricName: endRow.metricName,
+      metricValue,
+      unit: "per_second",
+      objectName: endRow.objectName,
+      instanceName: endRow.instanceName,
+      elapsedSeconds,
+    });
+  }
+
+  return rates;
+};
+
+const findRateRow = (
+  rateRows: CounterRateRow[],
+  counterName: string,
+  objectSuffix: string,
+  instance = "",
+) =>
+  rateRows.find(
+    (row) =>
+      row.metricName === counterName &&
+      (row.objectName ?? "").endsWith(objectSuffix) &&
+      (instance.length === 0 || (row.instanceName ?? "") === instance),
+  ) ??
+  rateRows.find(
+    (row) =>
+      row.metricName === counterName &&
+      (row.objectName ?? "").includes(objectSuffix) &&
+      (instance.length === 0 || (row.instanceName ?? "") === instance),
+  );
 
 /**
  * MSSQL Collector 어댑터 인스턴스를 생성합니다.
@@ -194,58 +306,65 @@ export const createMssqlCollectorAdapter = (
           }
         };
 
-        const rateCounterRows = await safeQuery("performance_counter_rates", async () => {
-          const result = await connection.request().query<CounterRateRow>(`
-            DECLARE @startedAt datetime2(7) = SYSDATETIME();
+        const rateCounterRows = await safeQuery("performance_counter_rates", () =>
+          samplePerformanceCounterRates(connection),
+        );
 
-            SELECT
-              RTRIM(object_name) AS objectName,
-              NULLIF(RTRIM(instance_name), '') AS instanceName,
-              RTRIM(counter_name) AS metricName,
-              CAST(cntr_value AS float) AS startedValue
-            INTO #counter_sample_start
-            FROM sys.dm_os_performance_counters
-            WHERE counter_name IN (
-              'Batch Requests/sec',
-              'Transactions/sec',
-              'Log Flushes/sec'
-            );
+        if (process.env.NODE_ENV === "development" && context.dbmsType === "AZURE_SQL") {
+          console.info(
+            "[MSSQL_COLLECT] performance_counter_rates",
+            rateCounterRows?.length ?? "skipped",
+          );
+        }
 
-            WAITFOR DELAY '00:00:01';
+        if (rateCounterRows && rateCounterRows.length > 0) {
+          const batch = findRateRow(
+            rateCounterRows,
+            "Batch Requests/sec",
+            "SQL Statistics",
+          );
+          if (batch) {
+            push(SERVER_METRIC_KEYS.batchRequestsPerSec, batch.metricValue, "per_second", {
+              rawName: batch.metricName,
+              source: "dm_os_performance_counters_delta",
+            });
+          }
 
-            DECLARE @finishedAt datetime2(7) = SYSDATETIME();
-            DECLARE @elapsedSeconds float =
-              DATEDIFF_BIG(millisecond, @startedAt, @finishedAt) / 1000.0;
+          const databaseCounterInstance = context.databaseName ?? "_Total";
+          const txn =
+            findRateRow(
+              rateCounterRows,
+              "Transactions/sec",
+              "Databases",
+              databaseCounterInstance,
+            ) ??
+            findRateRow(rateCounterRows, "Transactions/sec", "Databases", "_Total") ??
+            rateCounterRows.find((row) => row.metricName === "Transactions/sec");
+          if (txn) {
+            push(SERVER_METRIC_KEYS.transactionsPerSec, txn.metricValue, "per_second", {
+              rawName: txn.metricName,
+              source: "dm_os_performance_counters_delta",
+              instanceName: txn.instanceName ?? "_Total",
+            });
+          }
 
-            SELECT
-              RTRIM(current_counter.counter_name) AS metricName,
-              CAST(
-                CASE
-                  WHEN @elapsedSeconds > 0
-                    THEN (CAST(current_counter.cntr_value AS float) - start_counter.startedValue)
-                      / @elapsedSeconds
-                  ELSE 0
-                END AS float
-              ) AS metricValue,
-              'per_second' AS unit,
-              RTRIM(current_counter.object_name) AS objectName,
-              NULLIF(RTRIM(current_counter.instance_name), '') AS instanceName,
-              @elapsedSeconds AS elapsedSeconds
-            FROM sys.dm_os_performance_counters current_counter
-            INNER JOIN #counter_sample_start start_counter
-              ON RTRIM(current_counter.object_name) = start_counter.objectName
-              AND ISNULL(NULLIF(RTRIM(current_counter.instance_name), ''), '') =
-                ISNULL(start_counter.instanceName, '')
-              AND RTRIM(current_counter.counter_name) = start_counter.metricName
-            WHERE current_counter.counter_name IN (
-              'Batch Requests/sec',
-              'Transactions/sec',
-              'Log Flushes/sec'
-            );
-          `);
-
-          return result.recordset.filter((row) => row.metricValue >= 0);
-        });
+          const logFlush =
+            findRateRow(
+              rateCounterRows,
+              "Log Flushes/sec",
+              "Databases",
+              databaseCounterInstance,
+            ) ??
+            findRateRow(rateCounterRows, "Log Flushes/sec", "Databases", "_Total") ??
+            rateCounterRows.find((row) => row.metricName === "Log Flushes/sec");
+          if (logFlush) {
+            push(SERVER_METRIC_KEYS.logFlushesPerSec, logFlush.metricValue, "per_second", {
+              rawName: logFlush.metricName,
+              source: "dm_os_performance_counters_delta",
+              instanceName: logFlush.instanceName ?? "_Total",
+            });
+          }
+        }
 
         const counterRows = await safeQuery("performance_counters", async () => {
           const result = await connection.request().query<MetricRow>(`
@@ -270,6 +389,15 @@ export const createMssqlCollectorAdapter = (
               'Memory Grants Pending',
               'Process % Processor Time',
               '% Processor Time'
+            )
+            AND (
+              object_name LIKE '%SQL Statistics%'
+              OR object_name LIKE '%:Databases%'
+              OR object_name LIKE '%Buffer Manager%'
+              OR object_name LIKE '%Memory Manager%'
+              OR object_name LIKE '%General Statistics%'
+              OR object_name LIKE '%:Process%'
+              OR object_name LIKE '%:Processor%'
             )
           `);
           return result.recordset;
@@ -350,35 +478,41 @@ export const createMssqlCollectorAdapter = (
             });
           }
 
-          const batch = getRateCounter("SQLServer:SQL Statistics", "Batch Requests/sec");
-          if (batch) {
-            push(SERVER_METRIC_KEYS.batchRequestsPerSec, batch.metricValue, "per_second", {
-              rawName: batch.metricName,
-              source: "dm_os_performance_counters_delta",
-            });
+          if (!hasMetric(SERVER_METRIC_KEYS.batchRequestsPerSec)) {
+            const batch = getRateCounter("SQLServer:SQL Statistics", "Batch Requests/sec");
+            if (batch) {
+              push(SERVER_METRIC_KEYS.batchRequestsPerSec, batch.metricValue, "per_second", {
+                rawName: batch.metricName,
+                source: "dm_os_performance_counters_delta",
+              });
+            }
           }
 
           const databaseCounterInstance = context.databaseName ?? "_Total";
-          const txn =
-            getRateCounter("SQLServer:Databases", "Transactions/sec", databaseCounterInstance) ??
-            getRateCounter("SQLServer:Databases", "Transactions/sec", "_Total") ??
-            getRateCounter("SQLServer:Databases", "Transactions/sec");
-          if (txn) {
-            push(SERVER_METRIC_KEYS.transactionsPerSec, txn.metricValue, "per_second", {
-              rawName: txn.metricName,
-              source: "dm_os_performance_counters_delta",
-            });
+          if (!hasMetric(SERVER_METRIC_KEYS.transactionsPerSec)) {
+            const txn =
+              getRateCounter("SQLServer:Databases", "Transactions/sec", databaseCounterInstance) ??
+              getRateCounter("SQLServer:Databases", "Transactions/sec", "_Total") ??
+              getRateCounter("SQLServer:Databases", "Transactions/sec");
+            if (txn) {
+              push(SERVER_METRIC_KEYS.transactionsPerSec, txn.metricValue, "per_second", {
+                rawName: txn.metricName,
+                source: "dm_os_performance_counters_delta",
+              });
+            }
           }
 
-          const logFlush =
-            getRateCounter("SQLServer:Databases", "Log Flushes/sec", databaseCounterInstance) ??
-            getRateCounter("SQLServer:Databases", "Log Flushes/sec", "_Total") ??
-            getRateCounter("SQLServer:Databases", "Log Flushes/sec");
-          if (logFlush) {
-            push(SERVER_METRIC_KEYS.logFlushesPerSec, logFlush.metricValue, "per_second", {
-              rawName: logFlush.metricName,
-              source: "dm_os_performance_counters_delta",
-            });
+          if (!hasMetric(SERVER_METRIC_KEYS.logFlushesPerSec)) {
+            const logFlush =
+              getRateCounter("SQLServer:Databases", "Log Flushes/sec", databaseCounterInstance) ??
+              getRateCounter("SQLServer:Databases", "Log Flushes/sec", "_Total") ??
+              getRateCounter("SQLServer:Databases", "Log Flushes/sec");
+            if (logFlush) {
+              push(SERVER_METRIC_KEYS.logFlushesPerSec, logFlush.metricValue, "per_second", {
+                rawName: logFlush.metricName,
+                source: "dm_os_performance_counters_delta",
+              });
+            }
           }
 
           const userConn = getCounter("SQLServer:General Statistics", "User Connections");
@@ -744,60 +878,62 @@ export const createMssqlCollectorAdapter = (
           }
         }
 
-        const tableSizeRows = await safeQuery("table_sizes", async () => {
-          const result = await connection.request().query<{
-            schemaName: string;
-            tableName: string;
-            rowCount: number;
-            dataMb: number;
-            indexMb: number;
-          }>(`
-            SELECT TOP (30)
-              s.name AS schemaName,
-              t.name AS tableName,
-              CAST(SUM(CASE WHEN ps.index_id < 2 THEN ps.row_count ELSE 0 END) AS float) AS [rowCount],
-              CAST(
-                8 * SUM(
-                  CASE
-                    WHEN ps.index_id < 2 THEN
-                      ps.in_row_data_page_count +
-                      ps.lob_used_page_count +
-                      ps.row_overflow_used_page_count
-                    ELSE 0
-                  END
-                ) / 1024.0
-                AS float
-              ) AS dataMb,
-              CAST(
-                8 * SUM(CASE WHEN ps.index_id > 1 THEN ps.used_page_count ELSE 0 END) / 1024.0
-                AS float
-              ) AS indexMb
-            FROM sys.tables t
-            INNER JOIN sys.schemas s
-              ON t.schema_id = s.schema_id
-            INNER JOIN sys.dm_db_partition_stats ps
-              ON t.object_id = ps.object_id
-            WHERE t.is_ms_shipped = 0
-              AND t.type = 'U'
-            GROUP BY s.name, t.name
-            ORDER BY SUM(ps.used_page_count) DESC;
-          `);
-          return result.recordset;
-        });
+        if (context.dbmsType !== "AZURE_SQL") {
+          const tableSizeRows = await safeQuery("table_sizes", async () => {
+            const result = await connection.request().query<{
+              schemaName: string;
+              tableName: string;
+              rowCount: number;
+              dataMb: number;
+              indexMb: number;
+            }>(`
+              SELECT TOP (30)
+                s.name AS schemaName,
+                t.name AS tableName,
+                CAST(SUM(CASE WHEN ps.index_id < 2 THEN ps.row_count ELSE 0 END) AS float) AS [rowCount],
+                CAST(
+                  8 * SUM(
+                    CASE
+                      WHEN ps.index_id < 2 THEN
+                        ps.in_row_data_page_count +
+                        ps.lob_used_page_count +
+                        ps.row_overflow_used_page_count
+                      ELSE 0
+                    END
+                  ) / 1024.0
+                  AS float
+                ) AS dataMb,
+                CAST(
+                  8 * SUM(CASE WHEN ps.index_id > 1 THEN ps.used_page_count ELSE 0 END) / 1024.0
+                  AS float
+                ) AS indexMb
+              FROM sys.tables t
+              INNER JOIN sys.schemas s
+                ON t.schema_id = s.schema_id
+              INNER JOIN sys.dm_db_partition_stats ps
+                ON t.object_id = ps.object_id
+              WHERE t.is_ms_shipped = 0
+                AND t.type = 'U'
+              GROUP BY s.name, t.name
+              ORDER BY SUM(ps.used_page_count) DESC;
+            `);
+            return result.recordset;
+          });
 
-        if (tableSizeRows) {
-          for (const row of tableSizeRows) {
-            const tableKey = `${row.schemaName}.${row.tableName}`;
-            const totalMb = row.dataMb + row.indexMb;
-            const tags = {
-              tableKey,
-              schemaName: row.schemaName,
-              tableName: row.tableName,
-            };
-            push(SERVER_METRIC_KEYS.tableDataMb, row.dataMb, "mb", tags);
-            push(SERVER_METRIC_KEYS.tableIndexMb, row.indexMb, "mb", tags);
-            push(SERVER_METRIC_KEYS.tableTotalMb, totalMb, "mb", tags);
-            push(SERVER_METRIC_KEYS.tableRowCount, row.rowCount, "count", tags);
+          if (tableSizeRows) {
+            for (const row of tableSizeRows) {
+              const tableKey = `${row.schemaName}.${row.tableName}`;
+              const totalMb = row.dataMb + row.indexMb;
+              const tags = {
+                tableKey,
+                schemaName: row.schemaName,
+                tableName: row.tableName,
+              };
+              push(SERVER_METRIC_KEYS.tableDataMb, row.dataMb, "mb", tags);
+              push(SERVER_METRIC_KEYS.tableIndexMb, row.indexMb, "mb", tags);
+              push(SERVER_METRIC_KEYS.tableTotalMb, totalMb, "mb", tags);
+              push(SERVER_METRIC_KEYS.tableRowCount, row.rowCount, "count", tags);
+            }
           }
         }
 
@@ -922,6 +1058,39 @@ export const createMssqlCollectorAdapter = (
         totalCpuMs: Number(row.totalCpuMs) || 0,
         totalLogicalReads: Number(row.totalLogicalReads) || 0,
         lastExecutionTime: toIsoString(row.lastExecutionTime),
+      }));
+    },
+    collectSqlPlans: async (): Promise<SqlPlanPayload[]> => {
+      const collectTime = now();
+
+      const rows = await withConnection(async (connection) => {
+        const result = await connection.request().query<SqlPlanRow>(`
+          SELECT TOP (10)
+            CONVERT(varchar(64), qs.query_hash, 2) AS sqlId,
+            CONVERT(varchar(64), qs.plan_handle, 2) AS planHash,
+            LEFT(CAST(qp.query_plan AS nvarchar(max)), 8000) AS planText,
+            qs.execution_count AS executions,
+            CAST((qs.total_elapsed_time / NULLIF(qs.execution_count, 0)) / 1000.0 AS float) AS avgElapsedMs,
+            CAST(qs.total_worker_time / 1000.0 AS float) AS totalCpuMs,
+            CAST(qs.total_logical_reads AS float) AS totalLogicalReads
+          FROM sys.dm_exec_query_stats qs
+          CROSS APPLY sys.dm_exec_query_plan(qs.plan_handle) qp
+          WHERE qp.query_plan IS NOT NULL
+          ORDER BY qs.total_worker_time DESC;
+        `);
+
+        return result.recordset;
+      });
+
+      return rows.map((row) => ({
+        collectTime,
+        sqlId: row.sqlId,
+        planHash: row.planHash,
+        planText: row.planText ?? "",
+        executions: Number(row.executions) || 0,
+        avgElapsedMs: Number(row.avgElapsedMs) || 0,
+        totalCpuMs: Number(row.totalCpuMs) || 0,
+        totalLogicalReads: Number(row.totalLogicalReads) || 0,
       }));
     },
   };

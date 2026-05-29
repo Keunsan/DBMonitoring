@@ -1,6 +1,6 @@
 # 운영 DB 스키마 및 마이그레이션
 
-Last updated: 2026-05-27 KST
+Last updated: 2026-05-28 KST
 
 ## 1. 문서 목적
 
@@ -16,7 +16,9 @@ Last updated: 2026-05-27 KST
 | 영역 | 산출물 | 설명 |
 |------|--------|------|
 | Migration | `supabase/migrations/202605270001_phase5_core.sql` | 운영/시계열 핵심 테이블 DDL |
-| Storage | `services/storage/store.ts` | 개발용 메모리 저장소 |
+| Migration | `supabase/migrations/202605281200_operational_storage_phase8.sql` | session 확장 컬럼, `sql_plan_snapshot`, `sql_regression_event`, 인덱스 |
+| Storage | `services/storage/store.ts` | Supabase 우선 facade (미설정 시 memory fallback) |
+| Storage | `services/storage/supabase-store.ts` | 운영 DB 저장/조회 |
 | API | `app/api/monitoring/*` | 실행 이력·지표·세션·SQL 조회 |
 
 ---
@@ -31,10 +33,14 @@ Last updated: 2026-05-27 KST
 - `blocking_snapshot`
 - `sql_performance`
 - `deadlock_event`
+- `sql_plan_snapshot` (Phase 8)
+- `sql_regression_event` (Phase 8)
 
 ---
 
 ## 4. 결정사항
 
-- 실제 Supabase 적용 전 RLS와 RBAC는 Phase 2 재개 시 함께 확정합니다.
-- 현재 앱 런타임은 메모리 저장소를 사용하며, 마이그레이션은 운영 DB 전환용 초안입니다.
+- `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` 설정 시 수집 결과는 Supabase에 저장됩니다.
+- RLS는 Phase 2 인증/RBAC 재개 전까지 service role 서버 접근 기준으로 운영합니다.
+- Supabase 미설정 환경에서는 `services/storage/memory-store.ts` fallback을 유지합니다.
+- 운영 전 retention/cleanup job은 필수 후속 작업입니다.

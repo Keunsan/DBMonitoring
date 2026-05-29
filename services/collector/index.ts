@@ -7,4 +7,6 @@ export {
   listSchedulerStatuses,
   runCollectorForInstance,
   runCollectorOnce,
+  runCollectorSchedulerTick,
+  startCollectorScheduler,
 } from "./scheduler";

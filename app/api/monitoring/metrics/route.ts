@@ -14,12 +14,12 @@ const parseLimit = (value: string | null) => {
 /**
  * DB 인스턴스와 지표명 조건에 맞는 최근 지표 이력을 반환합니다.
  */
-export const GET = withApiHandler(({ request }) => {
+export const GET = withApiHandler(async ({ request }) => {
   const url = new URL(request.url);
 
   return {
     data: {
-      items: listMetricHistory({
+      items: await listMetricHistory({
         dbInstanceId: url.searchParams.get("dbInstanceId") ?? undefined,
         metricName: url.searchParams.get("metricName") ?? undefined,
         limit: parseLimit(url.searchParams.get("limit")),

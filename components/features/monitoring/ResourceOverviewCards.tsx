@@ -1,5 +1,6 @@
 /** CPU·메모리·디스크·로그·Temp 리소스 요약 카드를 표시합니다. */
 
+import { MetricInfoTooltip } from "@/components/features/monitoring/MetricInfoTooltip";
 import { MetricHealthBadge } from "@/components/features/monitoring/MetricHealthBadge";
 import {
   Card,
@@ -40,7 +41,9 @@ const ResourceCard = ({
   <Card>
     <CardHeader className="pb-1.5">
       <div className="flex items-center justify-between gap-2">
-        <CardDescription>{label}</CardDescription>
+        <CardDescription>
+          <MetricInfoTooltip tooltipKey={metricKey}>{label}</MetricInfoTooltip>
+        </CardDescription>
         <MetricHealthBadge metricKey={metricKey} value={value} />
       </div>
       <CardTitle className="text-xl">

@@ -29,6 +29,7 @@ export type ICollectorAdapter = {
   collectLocks: () => Promise<BlockingPayload[]>;
   collectDeadlocks: () => Promise<DeadlockPayload[]>;
   collectSql: () => Promise<SqlPerformancePayload[]>;
+  collectSqlPlans?: () => Promise<SqlPlanPayload[]>;
 };
 
 export type CollectorAdapter = ICollectorAdapter;
@@ -95,6 +96,17 @@ export type SqlPerformancePayload = {
   lastExecutionTime?: string | null;
 };
 
+export type SqlPlanPayload = {
+  collectTime: string;
+  sqlId: string;
+  planHash: string;
+  planText: string;
+  avgElapsedMs: number;
+  totalCpuMs: number;
+  totalLogicalReads?: number;
+  executions: number;
+};
+
 export type CollectorAdapterFactory = (
   context: CollectorContext,
 ) => CollectorAdapter;
@@ -110,5 +122,6 @@ export type CollectorRunResult = {
   locks: BlockingPayload[];
   deadlocks: DeadlockPayload[];
   sql: SqlPerformancePayload[];
+  sqlPlans: SqlPlanPayload[];
   errorMessage: string | null;
 };

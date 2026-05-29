@@ -2,6 +2,7 @@
 
 import { isApiRouteError } from "@/lib/api/errors";
 import { jsonFailure, jsonSuccess } from "@/lib/api/response";
+import { serializeError } from "@/lib/serialize-error";
 import type { ApiMeta } from "@/types/api";
 
 export type ApiRouteContext = {
@@ -30,6 +31,7 @@ const logUnexpectedApiError = (requestId: string, error: unknown) => {
     requestId,
     name: error instanceof Error ? error.name : "UnknownError",
     message: error instanceof Error ? error.message : "Unknown error",
+    error: serializeError(error),
   });
 };
 

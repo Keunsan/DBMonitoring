@@ -101,16 +101,29 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 ### 알림/대시보드 확인
 
 - 대시보드의 `미확인 알림`은 `/api/alerts` 응답 중 `status === "NEW"`인 알림 개수임
-- 알림은 임계치 정책 평가(`POST /api/alerts/evaluate`)로 생성되며 현재는 개발용 인메모리 저장소 기반
+- 알림 이벤트는 인메모리, **평가 입력 데이터**(지표/세션/SQL/Blocking)는 Supabase 설정 시 운영 저장소 기준
+
+### 운영 저장소 전환 + Phase 8 (2026-05-28)
+
+- `supabase/migrations/202605281200_operational_storage_phase8.sql` — session 확장, plan/regression 테이블
+- `services/storage/memory-store.ts`, `supabase-store.ts`, `store.ts`(facade)
+- 모니터링 API·알림 평가 입력을 async Supabase 조회로 전환
+- Phase 8:
+  - `/analysis/sql/[sqlId]` — SQL 상세 (T-038)
+  - `/analysis/plan-changes` — 실행 계획 변경 분석 (T-039)
+  - `/analysis/regressions` — 성능 회귀 탐지 (T-040)
+  - Top SQL 목록에서 SQL ID → 상세 링크
+  - Collector 성공 후 `detectSqlRegressions` 자동 실행
 
 ## 현재 목표
 
-- Azure SQL 메모리 사용률 수정 후 실제 Azure SQL 인스턴스에서 수집 API를 다시 실행해 화면 반영 확인
+- Supabase 프로젝트에 `202605281200_operational_storage_phase8.sql` 마이그레이션 적용
+- Collector 실행 후 서버 재시작해도 대시보드/Top SQL/회귀 데이터가 유지되는지 확인
 - 그 다음 작업 후보:
-  - **T-038**: Top SQL 목록에서 SQL 상세 분석 화면으로 확장
-  - Supabase 영구 저장 전환
-  - SSO/RBAC 연결
+  - **T-041**: 이슈 관리 (회귀 `issueCandidate` → 실제 이슈 생성)
+  - SSO/RBAC + RLS
   - 메신저 발송 API 연동
+  - retention/cleanup job
 
 ## Git 상태 (2026-05-28)
 
@@ -139,16 +152,18 @@ docs/session-handoff.md 문서를 기준으로 현재 작업을 이어서 진행
 1. Azure SQL 인스턴스에서 `POST /api/collector/run` 실행 후 `server.memory.used_percent`가 적재되는지 확인
 2. Azure SQL DB가 막 생성되었거나 부하가 없으면 `sys.dm_db_resource_stats`가 비어 있을 수 있으므로 몇 분 뒤 재시도
 3. 필요 시 Azure SQL 계정에 `VIEW DATABASE STATE` 권한이 있는지 확인
-4. **T-038**: Top SQL 목록에서 SQL 상세 분석 화면으로 확장
-5. 보류 항목 중 선택: Supabase 영구 저장, SSO/RBAC, 메신저 발송 API 연동
-6. Phase 2 재개 시 T-009/T-010 인증·RBAC 연결
+4. Supabase 마이그레이션 적용 후 `POST /api/collector/run` → DB row 저장 및 재시작 유지 확인
+5. `/analysis/plan-changes`, `/analysis/regressions` 화면에서 Azure/MSSQL 인스턴스 데이터 확인
+6. **T-041** 이슈 관리 착수
+7. 보류 항목: SSO/RBAC, 메신저 발송 API, retention job
 
 ## 주의할 점
 
 - `services/`는 React·클라이언트에서 import 금지
 - 실제 `.env.local` 값은 문서/로그/커밋에 남기지 않음
 - DB·SSO 미연동 — Health API의 `db`는 환경 변수 설정 상태만 표시
-- T-011~T-021 API/수집 결과 저장은 개발용 메모리 저장소 기반이며 Supabase 마이그레이션 초안만 작성됨
+- 수집 결과 저장은 Supabase 설정 시 운영 DB, 미설정 시 memory fallback (`services/storage/store.ts`)
+- Supabase 마이그레이션(`202605270001`, `202605281200`)은 프로젝트에 반영 후 **Supabase에 직접 적용** 필요
 - T-010 보류로 DB 관리 API의 역할별 권한 검증은 아직 미적용
 - Oracle Collector는 공통 인터페이스 스텁이며 실제 연결은 미구현
 - Azure SQL은 SQL 연결 기반 수집만 구현됨. Azure Monitor API, Resource Graph, AAD 인증은 아직 범위 밖

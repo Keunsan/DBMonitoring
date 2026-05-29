@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
 /**
  * DB 인스턴스 조건에 맞는 최근 Deadlock 이벤트를 반환합니다.
  */
-export const GET = withApiHandler(({ request }) => {
+export const GET = withApiHandler(async ({ request }) => {
   const url = new URL(request.url);
 
   return {
     data: {
-      items: listDeadlockEvents(url.searchParams.get("dbInstanceId") ?? undefined),
+      items: await listDeadlockEvents(url.searchParams.get("dbInstanceId") ?? undefined),
     },
   };
 });

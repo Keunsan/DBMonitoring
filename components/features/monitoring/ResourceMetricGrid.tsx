@@ -1,5 +1,7 @@
 /** 수집된 서버 리소스 세부 지표를 그리드 테이블로 표시합니다. */
 
+import { MetricInfoTooltip } from "@/components/features/monitoring/MetricInfoTooltip";
+import { MetricHealthBadge } from "@/components/features/monitoring/MetricHealthBadge";
 import {
   Table,
   TableBody,
@@ -8,7 +10,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { MetricHealthBadge } from "@/components/features/monitoring/MetricHealthBadge";
 import { SERVER_METRIC_KEYS } from "@/lib/monitoring/metric-keys";
 import {
   buildResourceSummary,
@@ -113,7 +114,9 @@ export const ResourceMetricGrid = ({ metrics, resource }: ResourceMetricGridProp
           return (
             <TableRow key={metric.id}>
               <TableCell>
-                {metricLabels[metric.metricName] ?? metric.metricName}
+                <MetricInfoTooltip tooltipKey={metric.metricName}>
+                  {metricLabels[metric.metricName] ?? metric.metricName}
+                </MetricInfoTooltip>
               </TableCell>
               <TableCell>{formatNumber(metric.metricValue, metric.unit)}</TableCell>
               <TableCell>{metric.unit ?? "-"}</TableCell>

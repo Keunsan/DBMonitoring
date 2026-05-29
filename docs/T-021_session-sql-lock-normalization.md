@@ -1,6 +1,6 @@
 # SESSION/SQL/LOCK 정규화 적재
 
-Last updated: 2026-05-27 KST
+Last updated: 2026-05-28 KST
 
 ## 1. 문서 목적
 
@@ -16,7 +16,8 @@ Last updated: 2026-05-27 KST
 | 영역 | 산출물 | 설명 |
 |------|--------|------|
 | Normalize | `services/storage/normalize.ts` | Collector 결과를 공통 레코드로 변환 |
-| Store | `services/storage/store.ts` | 세션, Blocking, SQL 성능, Deadlock 메모리 저장 |
+| Store | `services/storage/store.ts` | 세션, Blocking, SQL 성능, Plan, Deadlock facade |
+| Store | `services/storage/supabase-store.ts` | 운영 DB batch insert/조회 |
 | API | `app/api/monitoring/sessions/route.ts` | 세션 스냅샷 조회 |
 | API | `app/api/monitoring/sql/route.ts` | SQL 성능 조회 |
 | API | `app/api/monitoring/runs/route.ts` | Collector 실행 이력 조회 |

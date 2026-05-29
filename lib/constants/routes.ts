@@ -35,6 +35,8 @@ export const PORTAL_NAV_GROUPS: PortalNavGroup[] = [
     label: "성능 분석",
     items: [
       { label: "Top SQL 분석", href: "/analysis/top-sql", mvp: true },
+      { label: "실행 계획 변경", href: "/analysis/plan-changes", mvp: true },
+      { label: "성능 회귀 탐지", href: "/analysis/regressions", mvp: true },
     ],
   },
   {

@@ -75,6 +75,36 @@ export type SqlPerformanceRecord = {
   lastExecutionTime: string | null;
 };
 
+export type SqlPlanSnapshotRecord = {
+  id: string;
+  tenantId: TenantId;
+  dbInstanceId: DbInstanceId;
+  capturedAt: string;
+  sqlId: string;
+  planHash: string;
+  planText: string;
+  avgElapsedMs: number;
+  totalCpuMs: number;
+  totalLogicalReads: number | null;
+  executions: number;
+};
+
+export type SqlRegressionEventRecord = {
+  id: string;
+  tenantId: TenantId;
+  dbInstanceId: DbInstanceId;
+  detectedAt: string;
+  sqlId: string;
+  metricKey: string;
+  baselineValue: number;
+  currentValue: number;
+  changePercent: number;
+  severity: "WARNING" | "CRITICAL";
+  recommendation: string;
+  status: "OPEN" | "ACKNOWLEDGED";
+  issueCandidate: Record<string, unknown>;
+};
+
 export type DeadlockRecord = {
   id: string;
   tenantId: TenantId;
@@ -90,6 +120,8 @@ export type MonitoringStorageState = {
   sessionSnapshots: SessionSnapshotRecord[];
   blockingSnapshots: BlockingSnapshotRecord[];
   sqlPerformance: SqlPerformanceRecord[];
+  sqlPlanSnapshots: SqlPlanSnapshotRecord[];
+  sqlRegressionEvents: SqlRegressionEventRecord[];
   deadlocks: DeadlockRecord[];
 };
 

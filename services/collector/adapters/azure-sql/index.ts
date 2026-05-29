@@ -30,7 +30,6 @@ type AzureResourceStatsRow = {
   avgDataIoPercent: number | null;
   avgLogWritePercent: number | null;
   avgMemoryUsagePercent: number | null;
-  storageInMb: number | null;
 };
 
 const withConnection = <T>(
@@ -43,7 +42,6 @@ const AZURE_PREFERRED_METRIC_KEYS = new Set<string>([
   SERVER_METRIC_KEYS.memoryUsedPercent,
   SERVER_METRIC_KEYS.azureDataIoUsedPercent,
   SERVER_METRIC_KEYS.azureLogWriteUsedPercent,
-  SERVER_METRIC_KEYS.storageDataSizeMb,
 ]);
 
 const isValidMetricValue = (value: number | null | undefined): value is number =>
@@ -115,8 +113,7 @@ export const createAzureSqlCollectorAdapter = (
             CAST(avg_cpu_percent AS float) AS avgCpuPercent,
             CAST(avg_data_io_percent AS float) AS avgDataIoPercent,
             CAST(avg_log_write_percent AS float) AS avgLogWritePercent,
-            CAST(avg_memory_usage_percent AS float) AS avgMemoryUsagePercent,
-            CAST(storage_in_megabytes AS float) AS storageInMb
+            CAST(avg_memory_usage_percent AS float) AS avgMemoryUsagePercent
           FROM sys.dm_db_resource_stats
           WHERE end_time >= DATEADD(minute, -15, SYSUTCDATETIME())
           ORDER BY end_time DESC;
@@ -160,14 +157,6 @@ export const createAzureSqlCollectorAdapter = (
         row.avgLogWritePercent,
         "percent",
         { source: "sys.dm_db_resource_stats", azureMetric: "avg_log_write_percent" },
-      );
-      pushMetric(
-        metrics,
-        collectTime,
-        SERVER_METRIC_KEYS.storageDataSizeMb,
-        row.storageInMb,
-        "mb",
-        { source: "sys.dm_db_resource_stats" },
       );
     } catch (error) {
       if (process.env.NODE_ENV === "development") {
@@ -251,5 +240,9 @@ export const createAzureSqlCollectorAdapter = (
       sqlServerCompatibleAdapter.collectDeadlocks(),
     collectSql: async (): Promise<SqlPerformancePayload[]> =>
       sqlServerCompatibleAdapter.collectSql(),
+    collectSqlPlans: async () =>
+      sqlServerCompatibleAdapter.collectSqlPlans
+        ? sqlServerCompatibleAdapter.collectSqlPlans()
+        : [],
   };
 };

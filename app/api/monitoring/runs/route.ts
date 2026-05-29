@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
 /**
  * 최근 Collector 실행 이력을 반환합니다.
  */
-export const GET = withApiHandler(({ request }) => {
+export const GET = withApiHandler(async ({ request }) => {
   const url = new URL(request.url);
 
   return {
     data: {
-      items: listCollectionRuns(url.searchParams.get("dbInstanceId") ?? undefined),
+      items: await listCollectionRuns(url.searchParams.get("dbInstanceId") ?? undefined),
     },
   };
 });

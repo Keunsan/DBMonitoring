@@ -2,6 +2,7 @@
 
 /** 실시간 모니터링 화면에서 Collector 실행과 polling 조회를 제공하는 클라이언트 컴포넌트입니다. */
 
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -13,6 +14,7 @@ import {
 
 import { DbResourceCard } from "@/components/features/monitoring/DbResourceCard";
 import { DbStoragePanels } from "@/components/features/monitoring/DbStoragePanels";
+import { MetricInfoTooltip } from "@/components/features/monitoring/MetricInfoTooltip";
 import { ResourceMetricGrid } from "@/components/features/monitoring/ResourceMetricGrid";
 import { ResourceOverviewCards } from "@/components/features/monitoring/ResourceOverviewCards";
 import { ResourceTopLists } from "@/components/features/monitoring/ResourceTopLists";
@@ -45,6 +47,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ResourceSummary } from "@/lib/monitoring/resource-summary";
+import { SESSION_TOOLTIP_KEYS } from "@/lib/monitoring/metric-tooltips";
 import type { ApiResponse } from "@/types/api";
 import type { AlertEvent, DbInstance } from "@/types/entities";
 
@@ -328,7 +331,10 @@ export const MonitoringRealtimeClient = ({
             ) : variant === "deadlocks" ? (
               <DeadlockCard count={selected?.summary.deadlockCount ?? 0} />
             ) : variant === "top-sql" ? (
-              <SqlTable sql={selected?.summary.latestSql ?? []} />
+              <SqlTable
+                sql={selected?.summary.latestSql ?? []}
+                dbInstanceId={selected?.instance.id}
+              />
             ) : null}
           </>
         )}
@@ -478,14 +484,26 @@ type SessionSortKey =
   | "cpuTimeMs"
   | "logicalReads";
 
-const sessionColumns: Array<{ key: SessionSortKey; label: string }> = [
-  { key: "sessionId", label: "세션 ID" },
-  { key: "loginName", label: "계정" },
-  { key: "status", label: "상태" },
-  { key: "waitMs", label: "대기(ms)" },
-  { key: "blockingSessionId", label: "Blkby" },
-  { key: "cpuTimeMs", label: "CPU(ms)" },
-  { key: "logicalReads", label: "Reads" },
+const sessionColumns: Array<{
+  key: SessionSortKey;
+  label: string;
+  tooltipKey: string;
+}> = [
+  { key: "sessionId", label: "세션 ID", tooltipKey: SESSION_TOOLTIP_KEYS.sessionId },
+  { key: "loginName", label: "계정", tooltipKey: SESSION_TOOLTIP_KEYS.loginName },
+  { key: "status", label: "상태", tooltipKey: SESSION_TOOLTIP_KEYS.status },
+  { key: "waitMs", label: "대기(ms)", tooltipKey: SESSION_TOOLTIP_KEYS.waitMs },
+  {
+    key: "blockingSessionId",
+    label: "Blkby",
+    tooltipKey: SESSION_TOOLTIP_KEYS.blockingSessionId,
+  },
+  { key: "cpuTimeMs", label: "CPU(ms)", tooltipKey: SESSION_TOOLTIP_KEYS.cpuTimeMs },
+  {
+    key: "logicalReads",
+    label: "Reads",
+    tooltipKey: SESSION_TOOLTIP_KEYS.logicalReads,
+  },
 ];
 
 const getSessionSortValue = (session: SessionItem, key: SessionSortKey) => {
@@ -553,12 +571,22 @@ const SessionsTable = ({ sessions }: { sessions: SessionItem[] }) => {
                     className="px-3 py-2 text-left hover:text-foreground"
                     onClick={() => toggleSort(column.key)}
                   >
-                    {column.label}
+                    <MetricInfoTooltip tooltipKey={column.tooltipKey}>
+                      {column.label}
+                    </MetricInfoTooltip>
                     {sortKey === column.key ? (sortDirection === "asc" ? " ▲" : " ▼") : ""}
                   </button>
                 ))}
-                <div className="px-3 py-2">프로그램/DB</div>
-                <div className="px-3 py-2">실행 SQL Text</div>
+                <div className="px-3 py-2">
+                  <MetricInfoTooltip tooltipKey={SESSION_TOOLTIP_KEYS.programDatabase}>
+                    프로그램/DB
+                  </MetricInfoTooltip>
+                </div>
+                <div className="px-3 py-2">
+                  <MetricInfoTooltip tooltipKey={SESSION_TOOLTIP_KEYS.sqlText}>
+                    실행 SQL Text
+                  </MetricInfoTooltip>
+                </div>
               </div>
               {sortedSessions.map((session) => (
                 <div
@@ -601,11 +629,28 @@ const SessionsTable = ({ sessions }: { sessions: SessionItem[] }) => {
   );
 };
 
-const SqlTable = ({ sql }: { sql: SqlItem[] }) => (
+const SqlTable = ({
+  sql,
+  dbInstanceId,
+}: {
+  sql: SqlItem[];
+  dbInstanceId?: string;
+}) => (
   <DataTable title="Top SQL" empty="수집된 SQL 성능 데이터가 없습니다.">
     {sql.map((item) => (
       <TableRow key={item.sqlId}>
-        <TableCell className="max-w-48 truncate">{item.sqlId}</TableCell>
+        <TableCell className="max-w-48 truncate">
+          {dbInstanceId ? (
+            <Link
+              className="text-primary underline-offset-4 hover:underline"
+              href={`/analysis/sql/${encodeURIComponent(item.sqlId)}?dbInstanceId=${encodeURIComponent(dbInstanceId)}`}
+            >
+              {item.sqlId}
+            </Link>
+          ) : (
+            item.sqlId
+          )}
+        </TableCell>
         <TableCell>{formatNumber(item.executions)}</TableCell>
         <TableCell>{formatNumber(item.avgElapsedMs)}ms</TableCell>
         <TableCell>{formatNumber(item.totalCpuMs)}ms</TableCell>

@@ -1,6 +1,6 @@
 # 시계열 저장소(METRIC_HISTORY) 설계
 
-Last updated: 2026-05-27 KST
+Last updated: 2026-05-28 KST
 
 ## 1. 문서 목적
 
@@ -17,7 +17,8 @@ Last updated: 2026-05-27 KST
 |------|--------|------|
 | Type | `services/storage/types.ts` | `MetricHistoryRecord` 정의 |
 | Normalize | `services/storage/normalize.ts` | Collector metric payload 정규화 |
-| Store | `services/storage/store.ts` | 최근 지표 메모리 저장/조회 |
+| Store | `services/storage/store.ts` | Supabase/memory facade |
+| Store | `services/storage/supabase-store.ts` | `metric_history` batch insert/조회 |
 | API | `app/api/monitoring/metrics/route.ts` | 지표 이력 조회 |
 
 ---
